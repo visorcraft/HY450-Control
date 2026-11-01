@@ -1,6 +1,7 @@
 package com.visorcraft.hy450control;
 
 import android.content.Context;
+import android.content.res.ColorStateList;
 import android.graphics.Typeface;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
@@ -91,7 +92,7 @@ public final class Ui {
         Button button = new Button(context);
         button.setAllCaps(false);
         button.setTypeface(BLACK);
-        button.setTextColor(context.getColor(R.color.text_primary));
+        button.setTextColor(enabledText(context));
         button.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
         button.setPaddingRelative(px(context, 32), px(context, 24), px(context, 32), px(context, 24));
         button.setBackground(focusBackground(context));
@@ -112,7 +113,7 @@ public final class Ui {
         Button button = new Button(context);
         button.setAllCaps(false);
         button.setTypeface(MEDIUM);
-        button.setTextColor(context.getColor(R.color.text_primary));
+        button.setTextColor(enabledText(context));
         button.setGravity(Gravity.CENTER);
         button.setPaddingRelative(px(context, 24), px(context, 16), px(context, 24), px(context, 16));
         button.setBackground(focusBackground(context));
@@ -125,11 +126,11 @@ public final class Ui {
     }
 
     public static Drawable focusBackground(Context context) {
-        return cardStates(context, TILE_RADIUS_PX, false);
+        return cardStates(context, TILE_RADIUS_PX);
     }
 
     static Drawable rowBackground(Context context) {
-        return cardStates(context, ROW_RADIUS_PX, true);
+        return cardStates(context, ROW_RADIUS_PX);
     }
 
     static Drawable readonlyBackground(Context context) {
@@ -140,7 +141,7 @@ public final class Ui {
         return base;
     }
 
-    private static Drawable cardStates(Context context, float radiusPx, boolean mirrorSelection) {
+    private static Drawable cardStates(Context context, float radiusPx) {
         StateListDrawable states = new StateListDrawable();
         states.addState(new int[] { -android.R.attr.state_enabled },
                 card(context, context.getColor(R.color.disabled), radiusPx, false));
@@ -148,13 +149,21 @@ public final class Ui {
                 card(context, context.getColor(R.color.card_pressed), radiusPx, true));
         states.addState(new int[] { android.R.attr.state_focused },
                 card(context, context.getColor(R.color.card_focused), radiusPx, true));
-        if (mirrorSelection) {
-            states.addState(new int[] { android.R.attr.state_selected },
-                    card(context, context.getColor(R.color.card_focused), radiusPx, true));
-        }
         states.addState(new int[] { },
                 card(context, context.getColor(R.color.card), radiusPx, false));
         return states;
+    }
+
+    private static ColorStateList enabledText(Context context) {
+        return new ColorStateList(
+                new int[][] {
+                    new int[] { -android.R.attr.state_enabled },
+                    new int[] { }
+                },
+                new int[] {
+                    context.getColor(R.color.text_disabled),
+                    context.getColor(R.color.text_primary)
+                });
     }
 
     private static Drawable card(Context context, int color, float radiusPx, boolean rail) {
@@ -193,7 +202,9 @@ public final class Ui {
     /**
      * Control page row: weighted label on the leading side, monospace value on
      * the trailing side. The container never takes focus; the Activity focuses
-     * the label and the row mirrors that focus onto its own card background.
+     * the label, and the row aggregates its children's states so the card
+     * background follows the label's focus without owning the label's focus
+     * listener slot.
      */
     public static final class Row extends LinearLayout {
         public final TextView label;
@@ -207,6 +218,7 @@ public final class Ui {
             setBackground(rowBackground(context));
             setFocusable(false);
             setFocusableInTouchMode(false);
+            setAddStatesFromChildren(true);
 
             label = new TextView(context);
             size(label, ROW_LABEL_PX);
@@ -229,8 +241,6 @@ public final class Ui {
             value.setEllipsize(TextUtils.TruncateAt.END);
             addView(value, new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
-
-            label.setOnFocusChangeListener((v, hasFocus) -> setSelected(hasFocus));
         }
 
         public void setValue(String formatted) {
@@ -238,6 +248,9 @@ public final class Ui {
         }
 
         public void setReadOnly(boolean readOnly) {
+            if (readOnly) {
+                label.clearFocus();
+            }
             setBackground(readOnly ? readonlyBackground(getContext()) : rowBackground(getContext()));
             label.setFocusable(!readOnly);
             label.setFocusableInTouchMode(!readOnly);
