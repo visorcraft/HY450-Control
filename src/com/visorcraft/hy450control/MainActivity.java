@@ -46,18 +46,29 @@ public class MainActivity extends Activity {
         }
         shortcut(root, "Automation and remote", new Intent(this, AutomationActivity.class));
         shortcut(root, "Projection and calibration", new Intent(this, ProjectionActivity.class));
+        shortcut(root, "Square the image", new Intent(this, RectangleActivity.class));
         Button calibration = new Button(this);
         calibration.setText("Calibration toolkit");
         calibration.setTextSize(22);
         calibration.setOnClickListener(v -> startActivity(
                 new Intent(this, CalibrationActivity.class)));
         root.addView(calibration);
-        shortcut(root, "OEM focus and correction", "com.hysd.vafocus", "com.hysd.vafocus.VajzActivity");
+        Button focus = new Button(this);
+        focus.setText("OEM focus and correction");
+        focus.setTextSize(22);
+        focus.setOnClickListener(v -> OemFocus.launch(this));
+        root.addView(focus);
         shortcut(root, "Input source", "com.softwinner.awsource", "com.softwinner.awsource.MainActivity");
         shortcut(root, "Android settings", "com.android.tv.settings", "com.android.tv.settings.MainSettings");
         scroll.addView(root);
         setContentView(scroll);
         root.getChildAt(3).requestFocus();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        OemFocus.onResume(this);
     }
 
     private void page(LinearLayout root, String title, String family, List<Control> controls) {

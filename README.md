@@ -58,8 +58,8 @@ Verified on the retail development unit (Android 14 build
 
 ## Quick start
 
-The current signed release is **v1.0.0** (version code **2**). Download
-`hy450-control-1.0.0.apk` and `sha256sums.txt` from the
+The current signed release is **v1.1.3** (version code **6**). Download
+`hy450-control-1.1.3.apk` and `sha256sums.txt` from the
 [latest GitHub release](https://github.com/visorcraft/HY450-Control/releases/latest)
 into the same directory, then verify the download:
 
@@ -71,7 +71,7 @@ In a source checkout, place the downloaded APK in the Magisk module:
 
 ```bash
 mkdir -p module/system/priv-app/HY450Control
-cp /path/to/hy450-control-1.0.0.apk \
+cp /path/to/hy450-control-1.1.3.apk \
   module/system/priv-app/HY450Control/HY450Control.apk
 ```
 
@@ -130,7 +130,7 @@ partition, remove another module, or reset the projector.
 - **Audio controls** - audio mode, seven-band EQ, balance, output delay, output mode, surround, and automatic volume limiting.
 - **Input controls** - switch the active source, freeze the current input, control idle blue-screen behavior, and inspect the firmware's boot default.
 - **Projection backup** - save and restore projection settings as JSON without resetting keystone during backup.
-- **Calibration toolkit** - D-pad-friendly focus grid, sharpness, RGB, alignment, greyscale, and solid-colour patterns, plus shortcuts to the OEM focus/correction tools.
+- **Calibration toolkit** - D-pad-friendly focus grid, sharpness, RGB, alignment, greyscale, and solid-colour patterns. **Square the image** sets the keystone from the tilt sensor, using insets measured on the wall for this ceiling mount. Opening OEM focus and correction puts the previous keystone back when that screen exits, because the OEM screen clears it on the way out.
 - **Quick overlay** - backlight, volume, input selection, and close actions without opening the full control panel.
 - **Named presets** - save and reapply picture, audio, and input settings.
 - **Automation** - choose an app to launch after boot and set a sleep timer. Both are opt-in and can be switched off.
@@ -154,6 +154,9 @@ partition, remove another module, or reset the projector.
   compatible setter.
 - **Factory distortion recognition is not claimed as fixed.** The normal
   ceiling autofocus/calibration path is separate from that factory diagnostic.
+- **The built-in camera cannot see a wall trapezoid.** It looks along the
+  beam, so Square the image does not use it. The correction is the wall
+  measurement for this mount, scaled if the projector tilts.
 - **Streaming and DRM are out of scope.** This app does not unlock streaming
   services, certifications, codecs, or content protection.
 

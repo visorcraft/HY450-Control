@@ -4,6 +4,7 @@ build/
 capture/build/
 probe/build/
 module/system/priv-app/
+module/system/bin/
 *.img
 *.bin
 *.jar
