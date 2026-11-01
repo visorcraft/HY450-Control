@@ -264,7 +264,7 @@ Do not clamp snapshot values and do not modify `BackupStore` or its schema.
 
 - [ ] **Step 8: Update preset feedback and build**
 
-Route preset save/apply/failure messages through the persistent status instead of short toasts. Keep preset storage and apply semantics unchanged. Remove the obsolete `Toast` import and `toast(...)` method only after all uses are gone.
+Route preset save/apply/failure messages through the persistent status instead of short toasts. Keep preset storage unchanged, but skip read-only controls during preset application so they cannot cause a false failure or abort later writes; this is an explicit user-approved refinement of the original unchanged-preset constraint. Disable all three actions when the family cannot load or has no controls, refuse to save an empty value map, and cap detailed failure lists with a remaining-count summary so the fixed footer cannot consume the viewport. Remove the obsolete `Toast` import and `toast(...)` method only after all uses are gone.
 
 Run: `rtk ./build.sh && rtk git diff --check`
 Expected: build and APK verification succeed; no whitespace errors.

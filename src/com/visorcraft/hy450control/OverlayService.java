@@ -123,7 +123,7 @@ public final class OverlayService extends Service {
                 status.setText("Backlight: " + control.format(control.read()) + " • read back OK");
             }
         } catch (Exception error) {
-            status.setText("Backlight failed: " + error.getMessage());
+            status.setText("Backlight failed: " + Errors.describe(error));
         }
     }
 
@@ -134,7 +134,7 @@ public final class OverlayService extends Service {
             status.setText("Volume: " + audio.getStreamVolume(AudioManager.STREAM_MUSIC)
                     + "/" + audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC));
         } catch (Exception error) {
-            status.setText("Volume failed: " + error.getMessage());
+            status.setText("Volume failed: " + Errors.describe(error));
         }
     }
 

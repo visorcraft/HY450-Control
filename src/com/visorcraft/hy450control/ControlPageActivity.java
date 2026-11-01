@@ -18,6 +18,8 @@ import java.util.Map;
 import org.json.JSONObject;
 
 public final class ControlPageActivity extends Activity {
+    private static final int MAX_DETAILS = 3;
+
     private final List<Control> controls = new ArrayList<>();
     private final List<TextView> rows = new ArrayList<>();
     private String family;
@@ -49,7 +51,7 @@ public final class ControlPageActivity extends Activity {
         try {
             controls.addAll(loadControls(this, family));
         } catch (Exception error) {
-            loadError = error.getMessage();
+            loadError = Errors.describe(error);
         }
         presets = new PresetStore(this);
         ScrollView scroll = new ScrollView(this);
@@ -68,6 +70,11 @@ public final class ControlPageActivity extends Activity {
         saveButton = addAction(root, "Save current as preset", v -> savePreset());
         applyButton = addAction(root, "Apply saved preset", v -> applyPreset());
         restoreButton = addAction(root, "Restore original values", v -> restoreOriginals());
+        if (loadError != null || controls.isEmpty()) {
+            saveButton.setEnabled(false);
+            applyButton.setEnabled(false);
+            restoreButton.setEnabled(false);
+        }
         for (int i = 0; i < controls.size(); i++) {
             Control control = controls.get(i);
             TextView row = new TextView(this);
@@ -121,40 +128,40 @@ public final class ControlPageActivity extends Activity {
                 return;
             }
         }
-        saveButton.requestFocus();
+        if (saveButton.isEnabled()) saveButton.requestFocus();
     }
 
     private void backupOriginals() {
         Map<String, Integer> values = new HashMap<>();
         List<String> failures = new ArrayList<>();
-        for (Control control : controls) {
-            if (!control.adapter.isWritable()) continue;
-            try {
-                values.put(control.id, control.adapter.read());
-            } catch (Exception error) {
-                failures.add(control.title + ": " + error.getMessage());
-            }
-        }
-        if (values.isEmpty()) {
-            String message = "No original values could be read • no snapshot was created";
-            if (!failures.isEmpty()) message = message + "\n" + join(failures);
-            status.setText(message);
-            return;
-        }
-        boolean written = false;
         try {
             BackupStore backups = new BackupStore(this);
-            if (!backups.hasSnapshot(family)) {
-                backups.snapshot(family, values);
-                written = true;
+            if (backups.hasSnapshot(family)) {
+                status.setText("Original values backed up");
+                return;
             }
+            for (Control control : controls) {
+                if (!control.adapter.isWritable()) continue;
+                try {
+                    values.put(control.id, control.adapter.read());
+                } catch (Exception error) {
+                    failures.add(control.title + ": " + Errors.describe(error));
+                }
+            }
+            if (values.isEmpty()) {
+                String message = "No original values could be read • no snapshot was created";
+                if (!failures.isEmpty()) message = message + "\n" + detail(failures);
+                status.setText(message);
+                return;
+            }
+            backups.snapshot(family, values);
         } catch (Exception error) {
-            failures.add("Snapshot: " + error.getMessage());
+            failures.add("Snapshot: " + Errors.describe(error));
         }
         if (!failures.isEmpty()) {
             status.setText("Backup incomplete • " + failures.size() + " not backed up"
-                    + "\n" + join(failures));
-        } else if (written) {
+                    + "\n" + detail(failures));
+        } else {
             status.setText("Original values backed up");
         }
     }
@@ -165,7 +172,7 @@ public final class ControlPageActivity extends Activity {
             try {
                 rows.get(i).setText(control.title + "\n" + control.adapter.format(control.adapter.read()));
             } catch (Exception error) {
-                rows.get(i).setText(control.title + "\nUnavailable: " + error.getMessage());
+                rows.get(i).setText(control.title + "\nUnavailable: " + Errors.describe(error));
             }
         }
     }
@@ -187,7 +194,7 @@ public final class ControlPageActivity extends Activity {
                         + " • read back OK");
             }
         } catch (Exception error) {
-            status.setText(control.title + " failed: " + error.getMessage());
+            status.setText(control.title + " failed: " + Errors.describe(error));
         }
         refresh();
     }
@@ -208,17 +215,17 @@ public final class ControlPageActivity extends Activity {
                     control.adapter.write(stored.getInt(control.id));
                     restored++;
                 } catch (Exception error) {
-                    failures.add(control.title + ": " + error.getMessage());
+                    failures.add(control.title + ": " + Errors.describe(error));
                 }
             }
             StringBuilder message = new StringBuilder("Restored " + restored + " values");
             if (!failures.isEmpty()) {
                 message.append(" • ").append(failures.size()).append(" not restored");
-                for (String failure : failures) message.append("\n").append(failure);
+                message.append("\n").append(detail(failures));
             }
             status.setText(message.toString());
         } catch (Exception error) {
-            status.setText("Restore unavailable: " + error.getMessage());
+            status.setText("Restore unavailable: " + Errors.describe(error));
         }
         refresh();
     }
@@ -227,10 +234,14 @@ public final class ControlPageActivity extends Activity {
         try {
             Map<String, Integer> values = new HashMap<>();
             for (Control control : controls) values.put(control.id, control.adapter.read());
+            if (values.isEmpty()) {
+                status.setText("Nothing to save");
+                return;
+            }
             presets.save(family, values);
             status.setText("Preset saved");
         } catch (Exception error) {
-            status.setText("Save failed: " + error.getMessage());
+            status.setText("Save failed: " + Errors.describe(error));
         }
     }
 
@@ -238,11 +249,12 @@ public final class ControlPageActivity extends Activity {
         try {
             JSONObject stored = presets.read(family).getJSONObject("values");
             for (Control control : controls) {
+                if (!control.adapter.isWritable()) continue;
                 if (stored.has(control.id)) control.adapter.write(stored.getInt(control.id));
             }
             status.setText("Preset applied");
         } catch (Exception error) {
-            status.setText("Apply failed: " + error.getMessage());
+            status.setText("Apply failed: " + Errors.describe(error));
         }
         refresh();
     }
@@ -267,11 +279,15 @@ public final class ControlPageActivity extends Activity {
         return super.onKeyDown(code, event);
     }
 
-    private String join(List<String> values) {
+    private String detail(List<String> failures) {
         StringBuilder text = new StringBuilder();
-        for (String value : values) {
-            if (text.length() > 0) text.append("\n");
-            text.append(value);
+        int shown = Math.min(failures.size(), MAX_DETAILS);
+        for (int i = 0; i < shown; i++) {
+            if (i > 0) text.append("\n");
+            text.append(failures.get(i));
+        }
+        if (failures.size() > shown) {
+            text.append("\n...and ").append(failures.size() - shown).append(" more");
         }
         return text.toString();
     }

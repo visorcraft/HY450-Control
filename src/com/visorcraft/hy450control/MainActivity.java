@@ -34,7 +34,7 @@ public class MainActivity extends Activity {
             Control backlight = CapabilityRegistry.all(this).get(0);
             root.addView(text(backlight.title + ": " + backlight.adapter.read(), 22));
         } catch (Exception error) {
-            root.addView(text("Backlight unavailable: " + error.getMessage(), 18));
+            root.addView(text("Backlight unavailable: " + Errors.describe(error), 18));
         }
         controlPage(root, "Picture controls", "picture");
         controlPage(root, "Audio controls", "audio");
@@ -63,7 +63,7 @@ public class MainActivity extends Activity {
             ControlPageActivity.loadControls(this, family);
             button.setOnClickListener(v -> ControlPageActivity.start(this, title, family));
         } catch (Exception error) {
-            button.setText(title + "\nUnavailable: " + error.getMessage());
+            button.setText(title + "\nUnavailable: " + Errors.describe(error));
             button.setEnabled(false);
         }
         root.addView(button);
@@ -95,7 +95,7 @@ public class MainActivity extends Activity {
             try {
                 startActivity(new Intent().setComponent(new ComponentName(pkg, activity)));
             } catch (ActivityNotFoundException | SecurityException error) {
-                Toast.makeText(this, title + " unavailable: " + error.getMessage(),
+                Toast.makeText(this, title + " unavailable: " + Errors.describe(error),
                         Toast.LENGTH_LONG).show();
             }
         });
