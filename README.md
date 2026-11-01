@@ -128,18 +128,21 @@ partition, remove another module, or reset the projector.
 
 - **Picture controls** - backlight, brightness, contrast, hue, saturation, sharpness, picture mode, colour temperature, gamma, noise reduction, dynamic backlight, aspect ratio, HDMI video/PC mode, and video range.
 - **Audio controls** - audio mode, seven-band EQ, balance, output delay, output mode, surround, and automatic volume limiting.
-- **Input controls** - switch the active source, freeze the current input, control idle blue-screen behavior, and inspect the firmware's boot default.
+- **Input controls** - switch the active source, freeze the current input, control idle blue-screen behavior, and inspect the firmware's boot default without exposing it to D-pad adjustment.
+- **Readable, bounded controls** - On/Off and vendor-enum labels, clamped adjustments that never wrap, and persistent readback/limit/error feedback in a fixed status footer. Picture, audio, and input families load independently.
+- **Original-value restore** - restore a family's firmware-bound snapshot while continuing past unsupported controls; existing snapshots are never overwritten.
 - **Projection backup** - save and restore projection settings as JSON without resetting keystone during backup.
-- **Calibration toolkit** - D-pad-friendly focus grid, sharpness, RGB, alignment, greyscale, and solid-colour patterns. **Square the image** sets the keystone from the tilt sensor, using insets measured on the wall for this ceiling mount. Opening OEM focus and correction puts the previous keystone back when that screen exits, because the OEM screen clears it on the way out.
-- **Quick overlay** - backlight, volume, input selection, and close actions without opening the full control panel.
-- **Named presets** - save and reapply picture, audio, and input settings.
+- **Fullscreen calibration toolkit** - D-pad-friendly focus grid, sharpness, RGB, alignment, greyscale, and solid-colour patterns with system bars hidden. **Square the image** sets the keystone from the tilt sensor, using insets measured on the wall for this ceiling mount. Opening OEM focus and correction puts the previous keystone back when that screen exits, because the OEM screen clears it on the way out.
+- **Quick overlay** - backlight, volume, input selection, visible readback, BACK dismissal, and a 15-second inactivity timeout without opening the full control panel.
+- **Named presets** - save and reapply picture, audio, and input settings while skipping read-only entries during application.
 - **Automation** - choose an app to launch after boot and set a sleep timer. Both are opt-in and can be switched off.
 
 ## Safety model
 
 - Vendor values are read through the projector's own Allwinner APIs.
-- Numeric writes are bounded; enum writes use values supplied by the firmware.
-- Controls read back their values and retain original-value snapshots.
+- UI-generated numeric and enum adjustments clamp at their supported limits; snapshot and preset writes retain adapter range validation.
+- Controls read back their values, roll back mismatches where supported, and surface failures instead of hiding them.
+- Original-value snapshots are firmware-bound and never overwritten; restore validates the snapshot before attempting independent control writes.
 - Backup and preset data stays in the app's private storage.
 - Installation is a reversible Magisk overlay, not a raw partition write.
 - There is no arbitrary root-command interface and no DRM circumvention.
@@ -207,9 +210,14 @@ temperature, gamma, and dynamic-backlight values.
 The development-unit checks included:
 
 - Backlight write/readback/restore (`100 → 101 → 100`).
+- Original-value restoration of all 15 picture values, including backlight.
+- Gamma clamping at its maximum without wrapping (`3 → 4 → 5`, another step stayed at `5`), followed by restoration to `3`.
+- Readable enum and On/Off values, boolean limit handling, and D-pad navigation that skips the read-only boot-default row.
+- Partial audio backup/restore continuing past unsupported controls, with restored/failed counts and capped error details.
 - EQ-band and input-freeze writes followed by restoration.
 - Projection JSON backup/restore without changing keystone.
-- Quick-overlay opening and input handling.
+- Quick-overlay D-pad write/readback (`100 → 101 → 100`), BACK dismissal with focus restored, and 15-second automatic dismissal.
+- All six calibration patterns rendered fullscreen, pattern navigation, and BACK exit.
 - Startup-app launch after a real reboot, then automation disabled.
 - Sleep receiver putting the projector to sleep and POWER waking it.
 - Preset save/apply restoring the original backlight value.

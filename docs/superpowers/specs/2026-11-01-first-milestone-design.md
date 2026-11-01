@@ -45,7 +45,7 @@ After every successful adjustment, the page re-reads and displays the actual ada
 
 The existing `BackupStore` format and firmware fingerprint check remain unchanged. Initial snapshot creation records readable, writable controls individually so one unsupported control does not discard the whole family's backup. Existing snapshots are never overwritten.
 
-Restore reads the current family's snapshot and attempts each matching writable control independently. Missing, read-only, unsupported, out-of-range, and readback-failing entries are reported and do not stop later entries. The operation ends with persistent restored/failed counts and per-control failure details where needed. It then refreshes every row from hardware. A missing or firmware-mismatched snapshot is an explicit error and results in no partial interpretation of the file.
+Restore reads the current family's snapshot and attempts each matching writable control independently. Read-only controls are skipped. Missing, unsupported, out-of-range, and readback-failing writable entries are reported and do not stop later entries. The operation ends with persistent restored/failed counts and per-control failure details where needed. It then refreshes every row from hardware. A missing or firmware-mismatched snapshot is an explicit error and results in no partial interpretation of the file.
 
 ## Quick overlay
 
