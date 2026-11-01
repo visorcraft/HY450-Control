@@ -126,16 +126,17 @@ partition, remove another module, or reset the projector.
 
 ## What you get
 
+- **Signal Console interface** - a graphite-and-cyan visorcraft dashboard with live lamp/volume instruments, bold family tiles, D-pad focus rails, and demoted OEM tools. Control pages add a pinned TARGET band, aligned monospace values, fixed preset/restore actions, and semantic status feedback.
 - **Picture controls** - backlight, brightness, contrast, hue, saturation, sharpness, picture mode, colour temperature, gamma, noise reduction, dynamic backlight, aspect ratio, HDMI video/PC mode, and video range.
 - **Audio controls** - audio mode, seven-band EQ, balance, output delay, output mode, surround, and automatic volume limiting.
 - **Input controls** - switch the active source, freeze the current input, control idle blue-screen behavior, and inspect the firmware's boot default without exposing it to D-pad adjustment.
-- **Readable, bounded controls** - On/Off and vendor-enum labels, clamped adjustments that never wrap, and persistent readback/limit/error feedback in a fixed status footer. Picture, audio, and input families load independently.
+- **Readable, bounded controls** - On/Off and vendor-enum labels, clamped adjustments that never wrap, and persistent readback/limit/error feedback in a fixed status footer. Picture, audio, and input families load independently; adjustments refresh only the affected row.
 - **Original-value restore** - restore a family's firmware-bound snapshot while continuing past unsupported controls; existing snapshots are never overwritten.
 - **Projection backup** - save and restore projection settings as JSON without resetting keystone during backup.
 - **Fullscreen calibration toolkit** - D-pad-friendly focus grid, sharpness, RGB, alignment, greyscale, and solid-colour patterns with system bars hidden. **Square the image** sets the keystone from the tilt sensor, using insets measured on the wall for this ceiling mount. Opening OEM focus and correction puts the previous keystone back when that screen exits, because the OEM screen clears it on the way out.
-- **Quick overlay** - backlight, volume, input selection, visible readback, BACK dismissal, and a 15-second inactivity timeout without opening the full control panel.
+- **Quick overlay** - backlight, volume, input selection, visible readback, BACK dismissal, and a visible 15-second countdown without opening the full control panel. Launching the OEM input source dismisses the overlay first.
 - **Named presets** - save and reapply picture, audio, and input settings while skipping read-only entries during application.
-- **Automation** - choose an app to launch after boot and set a sleep timer. Both are opt-in and can be switched off.
+- **Automation** - choose an app to launch after boot and set a sleep timer. Both are opt-in and can be switched off. Accessibility configuration uses Android's system settings instead of rewriting the enabled-service list.
 
 ## Safety model
 
