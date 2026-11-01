@@ -58,8 +58,8 @@ Verified on the retail development unit (Android 14 build
 
 ## Quick start
 
-The current signed release is **v1.1.3** (version code **6**). Download
-`hy450-control-1.1.3.apk` and `sha256sums.txt` from the
+The current signed release is **v1.2.0** (version code **7**). Download
+`hy450-control-1.2.0.apk` and `sha256sums.txt` from the
 [latest GitHub release](https://github.com/visorcraft/HY450-Control/releases/latest)
 into the same directory, then verify the download:
 
@@ -71,7 +71,7 @@ In a source checkout, place the downloaded APK in the Magisk module:
 
 ```bash
 mkdir -p module/system/priv-app/HY450Control
-cp /path/to/hy450-control-1.1.3.apk \
+cp /path/to/hy450-control-1.2.0.apk \
   module/system/priv-app/HY450Control/HY450Control.apk
 ```
 
