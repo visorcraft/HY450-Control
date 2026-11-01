@@ -1,0 +1,12 @@
+build/
+*.apk
+*.idsig
+capture/build/
+probe/build/
+module/system/priv-app/
+*.img
+*.bin
+*.jar
+*.keystore
+*.jks
+.env

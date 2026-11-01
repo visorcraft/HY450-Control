@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">HY450 Control</string>
+    <string name="remote_description">HY450 remote shortcut configuration</string>
+</resources>
