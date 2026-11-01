@@ -10,3 +10,5 @@ module/system/priv-app/
 *.keystore
 *.jks
 .env
+.worktrees/
+.superpowers/
