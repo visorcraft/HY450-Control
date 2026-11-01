@@ -117,6 +117,7 @@ jobs:
       group: release-${{ github.ref }}
       cancel-in-progress: false
     steps:
+      - uses: actions/checkout@v7
       - name: Download verified release artifact
         uses: actions/download-artifact@v7
         with:
