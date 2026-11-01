@@ -7,7 +7,7 @@ import android.view.KeyEvent;
 
 public final class RemoteAccessibilityService extends AccessibilityService {
     public boolean onKeyEvent(KeyEvent event) {
-        android.util.Log.e("HY450Control", "Remote key=" + event.getKeyCode());
+        android.util.Log.d("HY450Control", "Remote key=" + event.getKeyCode());
         if (event.getAction() != KeyEvent.ACTION_DOWN) return false;
         int configured = getSharedPreferences("automation", MODE_PRIVATE)
                 .getInt("remote_key", KeyEvent.KEYCODE_MENU);
