@@ -1,0 +1,131 @@
+name: build-and-release
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build + verify APK
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Set up JDK 17
+        uses: actions/setup-java@v6
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+      - name: Install Android packages
+        run: |
+          yes | sdkmanager --licenses >/dev/null
+          sdkmanager "platforms;android-34" "build-tools;35.0.0"
+      - name: Resolve module version + verify tag
+        id: version
+        env:
+          TAG: ${{ github.ref_name }}
+          REF_TYPE: ${{ github.ref_type }}
+        run: |
+          version="$(awk -F= '$1 == "version" { print $2; exit }' module/module.prop)"
+          code="$(awk -F= '$1 == "versionCode" { print $2; exit }' module/module.prop)"
+          if [[ -z "$version" || -z "$code" ]]; then
+            echo "module version/versionCode is required" >&2
+            exit 1
+          fi
+          if [[ "$REF_TYPE" == "tag" && "$TAG" != "v${version}" ]]; then
+            echo "tag ${TAG} does not match module version ${version}" >&2
+            exit 1
+          fi
+          printf 'version=%s\ntag=%s\ncode=%s\n' "$version" "$TAG" "$code" >> "$GITHUB_OUTPUT"
+      - name: Prepare signing key
+        env:
+          KEYSTORE_B64: ${{ secrets.HY450_KEYSTORE_B64 }}
+          REF_TYPE: ${{ github.ref_type }}
+        run: |
+          if [[ "$REF_TYPE" == "tag" ]]; then
+            if [[ -z "$KEYSTORE_B64" ]]; then
+              echo "HY450_KEYSTORE_B64 secret is not set" >&2
+              exit 1
+            fi
+            printf '%s' "$KEYSTORE_B64" | base64 -d > release.keystore
+          else
+            keytool -genkeypair -keystore release.keystore \
+              -storepass android -keypass android -alias androiddebugkey \
+              -dname "CN=Android Debug,O=Android,C=US" \
+              -keyalg RSA -keysize 2048 -validity 10000
+          fi
+          keytool -list -keystore release.keystore -storepass android \
+            -alias androiddebugkey >/dev/null
+      - name: Build APK
+        env:
+          ANDROID_KEYSTORE: ${{ github.workspace }}/release.keystore
+        run: ./build.sh
+      - name: Verify APK metadata
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          CODE: ${{ steps.version.outputs.code }}
+        run: |
+          export BADGING="$ANDROID_HOME/build-tools/35.0.0/aapt2"
+          python3 - <<'PY'
+          import os
+          import subprocess
+          output = subprocess.check_output(
+              [os.environ["BADGING"], "dump", "badging", "hy450-control.apk"],
+              text=True,
+          )
+          first = output.splitlines()[0]
+          expected = "versionCode='%s' versionName='%s'" % (
+              os.environ["CODE"], os.environ["VERSION"])
+          assert "com.visorcraft.hy450control" in first, first
+          assert expected in first, first
+          print(first)
+          PY
+      - name: Stage artifacts + checksum
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          mkdir -p dist
+          cp hy450-control.apk "dist/hy450-control-${VERSION}.apk"
+          (cd dist && sha256sum -- * > sha256sums.txt)
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: hy450-control-${{ steps.version.outputs.version }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 30
+
+  release:
+    name: Publish GitHub release
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    concurrency:
+      group: release-${{ github.ref }}
+      cancel-in-progress: false
+    steps:
+      - name: Download verified release artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: hy450-control-${{ needs.build.outputs.version }}
+          path: dist
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.build.outputs.tag }}
+        run: |
+          gh release create "$TAG" dist/* \
+            --title "HY450 Control $TAG" \
+            --generate-notes \
+            --verify-tag

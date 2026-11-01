@@ -58,7 +58,29 @@ Verified on the retail development unit (Android 14 build
 
 ## Quick start
 
-### Prerequisites
+The current signed release is **v1.0.0** (version code **2**). Download
+`hy450-control-1.0.0.apk` and `sha256sums.txt` from the
+[latest GitHub release](https://github.com/visorcraft/HY450-Control/releases/latest)
+into the same directory, then verify the download:
+
+```bash
+sha256sum -c sha256sums.txt
+```
+
+In a source checkout, place the downloaded APK in the Magisk module:
+
+```bash
+mkdir -p module/system/priv-app/HY450Control
+cp /path/to/hy450-control-1.0.0.apk \
+  module/system/priv-app/HY450Control/HY450Control.apk
+```
+
+An ordinary `adb install` is not sufficient: the app must be installed through
+this module to receive its priv-app permissions.
+
+### Build from source (alternative)
+
+Prerequisites:
 
 - A compatible, Magisk-rooted projector with adb access
 - A computer with a JDK, `zip`, and Android adb
@@ -66,16 +88,17 @@ Verified on the retail development unit (Android 14 build
 - `ANDROID_HOME` set, or an SDK at `$HOME/Android/Sdk`
 - An Android debug keystore at `$HOME/.android/debug.keystore`
 
-### Build
-
 ```bash
 git clone https://github.com/visorcraft/HY450-Control.git
 cd HY450-Control
 ./build.sh
 ```
 
-The build creates a debug-signed `hy450-control.apk` and places a copy in the
-Magisk module. Both are generated outputs and are intentionally not tracked.
+The build reads `version` and `versionCode` from `module/module.prop`, creates
+a debug-signed `hy450-control.apk`, and places a copy in the Magisk module.
+Both are generated outputs and are intentionally not tracked. Set
+`ANDROID_KEYSTORE`, `ANDROID_KEYSTORE_PASS`, and `ANDROID_KEY_ALIAS` to sign
+with a different key.
 
 ### Install
 
@@ -189,6 +212,22 @@ The development-unit checks included:
 - Preset save/apply restoring the original backlight value.
 - Module removal and reinstallation, with Projectivy accessibility and the
   existing framework fix left intact.
+
+## Release automation
+
+GitHub Actions builds and verifies the APK on every push to `main` and every
+pull request. A pushed `v*` tag additionally creates a signed GitHub Release
+with the versioned APK and its SHA-256 checksum. The release job rejects a tag
+that does not match `module/module.prop`.
+
+To publish a new version:
+
+1. Update `version` and `versionCode` together in `module/module.prop`.
+2. Commit and push `main`, then wait for its build to pass.
+3. Create and push an annotated `v<version>` tag.
+
+Release signing uses the stable `HY450_KEYSTORE_B64` repository secret so users
+receive the same signer across releases. The key itself is never committed.
 
 ## Credits / related work
 
