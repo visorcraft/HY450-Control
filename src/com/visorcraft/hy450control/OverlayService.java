@@ -1,15 +1,17 @@
 package com.visorcraft.hy450control;
 
 import android.app.Service;
+import android.content.ActivityNotFoundException;
+import android.content.ComponentName;
 import android.content.Intent;
-import android.graphics.Color;
 import android.graphics.PixelFormat;
 import android.media.AudioManager;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
+import android.os.SystemClock;
+import android.view.Gravity;
 import android.view.KeyEvent;
-import android.view.View;
 import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.LinearLayout;
@@ -17,12 +19,23 @@ import android.widget.TextView;
 
 public final class OverlayService extends Service {
     private static final long TIMEOUT_MS = 15000L;
+    private static final long TICK_MS = 250L;
+    private static final float PANEL_WIDTH_PX = 560f;
+    private static final float PANEL_PADDING_PX = 24f;
+    private static final float GAP_PX = 12f;
+    private static final float STATUS_GAP_PX = 8f;
+    private static final float STATUS_PX = 38f;
+    private static final float OFFSET_PX = 48f;
 
     private WindowManager windows;
     private LinearLayout panel;
     private TextView status;
+    private CountdownBar countdown;
+    private Button focusChip;
     private Handler handler;
+    private long deadline;
     private final Runnable timeout = () -> stopSelf();
+    private final Runnable ticker = this::tick;
 
     public void onCreate() {
         super.onCreate();
@@ -37,8 +50,24 @@ public final class OverlayService extends Service {
     }
 
     private void armTimeout() {
+        deadline = SystemClock.uptimeMillis() + TIMEOUT_MS;
         handler.removeCallbacks(timeout);
+        handler.removeCallbacks(ticker);
         handler.postDelayed(timeout, TIMEOUT_MS);
+        handler.postDelayed(ticker, TICK_MS);
+        updateCountdown();
+    }
+
+    private void tick() {
+        if (countdown == null) return;
+        updateCountdown();
+        handler.postDelayed(ticker, TICK_MS);
+    }
+
+    private void updateCountdown() {
+        if (countdown == null) return;
+        long remaining = deadline - SystemClock.uptimeMillis();
+        countdown.setFraction(remaining <= 0 ? 0f : remaining / (float) TIMEOUT_MS);
     }
 
     private void showPanel() {
@@ -54,15 +83,28 @@ public final class OverlayService extends Service {
             }
         };
         panel.setOrientation(LinearLayout.VERTICAL);
-        panel.setBackgroundColor(Color.argb(230, 20, 20, 20));
-        panel.setPadding(24, 24, 24, 24);
-        status = new TextView(this);
-        status.setText("Ready");
-        status.setTextSize(18);
-        status.setTextColor(Color.LTGRAY);
+        panel.setBackground(Ui.focusBackground(this));
+        int pad = Ui.px(this, PANEL_PADDING_PX);
+        panel.setPadding(pad, pad, pad, pad);
+
+        TextView kicker = Ui.kicker(this, "Quick overlay");
+        kicker.setFocusable(false);
+        panel.addView(kicker);
+
+        status = Ui.text(this, "Ready", STATUS_PX, R.color.text_primary);
         status.setFocusable(false);
-        status.setPadding(24, 16, 24, 16);
-        panel.addView(status);
+        LinearLayout.LayoutParams statusParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        statusParams.topMargin = Ui.px(this, STATUS_GAP_PX);
+        panel.addView(status, statusParams);
+
+        countdown = new CountdownBar(this);
+        LinearLayout.LayoutParams barParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        barParams.topMargin = Ui.px(this, GAP_PX);
+        barParams.bottomMargin = Ui.px(this, GAP_PX);
+        panel.addView(countdown, barParams);
+
         VendorIntControl backlight;
         try {
             backlight = new VendorIntControl(Vendor.display(), "getBacklight", "setBacklight", null, 0, 255);
@@ -74,41 +116,46 @@ public final class OverlayService extends Service {
         add("Backlight -", () -> adjust(backlight, -1));
         add("Volume +", () -> volume(1));
         add("Volume -", () -> volume(-1));
-        add("Input source", () -> startActivity(new Intent()
-                .setComponent(new android.content.ComponentName(
-                        "com.softwinner.awsource", "com.softwinner.awsource.MainActivity"))
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)));
+        add("Input source", this::openInputSource);
         add("Close", this::stopSelf);
         WindowManager.LayoutParams params = new WindowManager.LayoutParams(
-                WindowManager.LayoutParams.WRAP_CONTENT,
+                Ui.px(this, PANEL_WIDTH_PX),
                 WindowManager.LayoutParams.WRAP_CONTENT,
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
                 WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
                 PixelFormat.TRANSLUCENT);
-        params.gravity = android.view.Gravity.TOP | android.view.Gravity.START;
+        params.gravity = Gravity.TOP | Gravity.START;
+        params.x = Ui.px(this, OFFSET_PX);
+        params.y = Ui.px(this, OFFSET_PX);
         windows.addView(panel, params);
-        focusFirstButton();
+        if (focusChip != null) focusChip.requestFocus();
     }
 
     private void add(String title, Action action) {
-        Button button = new Button(this);
-        button.setText(title);
-        button.setTextSize(20);
+        Button button = Ui.chip(this, title);
+        button.setMinimumHeight(0);
         button.setOnClickListener(v -> {
             armTimeout();
             action.run();
         });
-        panel.addView(button);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        params.topMargin = Ui.px(this, GAP_PX);
+        panel.addView(button, params);
+        if (focusChip == null) focusChip = button;
     }
 
-    private void focusFirstButton() {
-        for (int i = 0; i < panel.getChildCount(); i++) {
-            View child = panel.getChildAt(i);
-            if (child instanceof Button) {
-                child.requestFocus();
-                return;
-            }
+    private void openInputSource() {
+        try {
+            startActivity(new Intent()
+                    .setComponent(new ComponentName(
+                            "com.softwinner.awsource", "com.softwinner.awsource.MainActivity"))
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        } catch (ActivityNotFoundException | SecurityException error) {
+            status.setText("Input source unavailable: " + Errors.describe(error));
+            return;
         }
+        stopSelf();
     }
 
     private void adjust(VendorIntControl control, int direction) {
@@ -140,11 +187,14 @@ public final class OverlayService extends Service {
 
     public void onDestroy() {
         handler.removeCallbacks(timeout);
+        handler.removeCallbacks(ticker);
         if (panel != null) {
             if (panel.isAttachedToWindow()) windows.removeView(panel);
             panel = null;
         }
         status = null;
+        countdown = null;
+        focusChip = null;
         super.onDestroy();
     }
 
