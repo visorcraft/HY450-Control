@@ -13,6 +13,9 @@ public final class ReadOnlyControl implements ControlAdapter {
     public int min() { return 0; }
     public int max() { return 0; }
 
+    @Override
+    public boolean isWritable() { return false; }
+
     public int read() throws Exception {
         return ((Number) Vendor.call(manager, getter, new Class<?>[0])).intValue();
     }

@@ -28,6 +28,22 @@ public final class VendorEnumControl implements ControlAdapter {
     public int min() { return 0; }
     public int max() { return values.length - 1; }
 
+    @Override
+    public String format(int value) {
+        if (value < min() || value > max()) throw new IllegalArgumentException("Out of range");
+        String name = ((Enum<?>) values[value]).name();
+        if (name.startsWith("E_AW_")) name = name.substring(5);
+        String[] words = name.toLowerCase(java.util.Locale.ROOT).split("_");
+        StringBuilder label = new StringBuilder();
+        for (String word : words) {
+            if (word.isEmpty()) continue;
+            if (label.length() > 0) label.append(' ');
+            label.append(Character.toUpperCase(word.charAt(0)));
+            if (word.length() > 1) label.append(word.substring(1));
+        }
+        return label.toString();
+    }
+
     public int read() throws Exception {
         Object current = Vendor.call(manager, getter, new Class<?>[0]);
         for (int i = 0; i < values.length; i++) {
