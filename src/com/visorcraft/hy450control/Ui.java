@@ -180,6 +180,7 @@ public final class Ui {
         accent.setCornerRadii(new float[] { radius, radius, 0f, 0f, 0f, 0f, radius, radius });
         accent.setSize(px(context, RAIL_PX), -1);
         LayerDrawable layered = new LayerDrawable(new Drawable[] { base, accent });
+        layered.setLayerSize(1, px(context, RAIL_PX), -1);
         layered.setLayerGravity(1, Gravity.START | Gravity.FILL_VERTICAL);
         return layered;
     }
