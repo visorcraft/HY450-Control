@@ -16,6 +16,7 @@ import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+import android.widget.Toast;
 
 public final class OverlayService extends Service {
     private static final long TIMEOUT_MS = 15000L;
@@ -146,16 +147,25 @@ public final class OverlayService extends Service {
     }
 
     private void openInputSource() {
+        handler.removeCallbacks(timeout);
+        handler.removeCallbacks(ticker);
+        detachPanel();
         try {
             startActivity(new Intent()
                     .setComponent(new ComponentName(
                             "com.softwinner.awsource", "com.softwinner.awsource.MainActivity"))
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
         } catch (ActivityNotFoundException | SecurityException error) {
-            status.setText("Input source unavailable: " + Errors.describe(error));
-            return;
+            Toast.makeText(this, "Input source unavailable: " + Errors.describe(error),
+                    Toast.LENGTH_LONG).show();
         }
         stopSelf();
+    }
+
+    private void detachPanel() {
+        if (panel == null) return;
+        if (panel.isAttachedToWindow()) windows.removeView(panel);
+        panel = null;
     }
 
     private void adjust(VendorIntControl control, int direction) {
@@ -188,10 +198,7 @@ public final class OverlayService extends Service {
     public void onDestroy() {
         handler.removeCallbacks(timeout);
         handler.removeCallbacks(ticker);
-        if (panel != null) {
-            if (panel.isAttachedToWindow()) windows.removeView(panel);
-            panel = null;
-        }
+        detachPanel();
         status = null;
         countdown = null;
         focusChip = null;

@@ -64,7 +64,7 @@ Cache each row's displayed value string. Focus changes update TARGET from that c
 
 `OverlayService` uses the same card/focus system with a 560 px panel and readable status. Add a thin custom-drawn countdown bar driven by a new periodic runnable on the existing Handler every 250 ms; it must not change LayoutParams or allocate per-frame objects. Any interaction rearms it to 15 seconds. BACK and Close still dismiss.
 
-“Input source” dispatches `startActivity(NEW_TASK)` and then calls `stopSelf()`, allowing the OEM screen to receive D-pad focus without the overlay above it. `onDestroy` removes both timeout and countdown callbacks and detaches the panel safely.
+“Input source” removes the timeout and countdown callbacks and detaches the overlay panel before it dispatches `startActivity(NEW_TASK)`, and calls `stopSelf()` afterwards, so the overlay is never composed above the OEM screen and the OEM screen receives D-pad focus. A missing or blocked OEM activity is reported with a visible Toast. `onDestroy` removes both timeout and countdown callbacks and detaches the panel safely.
 
 ## Automation and projection
 

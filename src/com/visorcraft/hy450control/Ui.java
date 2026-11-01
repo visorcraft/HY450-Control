@@ -34,6 +34,7 @@ public final class Ui {
     private static final float KICKER_PX = 30f;
     private static final float ROW_LABEL_PX = 46f;
     private static final float ROW_VALUE_PX = 52f;
+    private static final float ROW_VALUE_MAX_PX = 700f;
     private static final float CHIP_PX = 38f;
 
     private static final float TILE_SUBTITLE_SCALE = 0.55f;
@@ -237,8 +238,7 @@ public final class Ui {
             value.setTypeface(Typeface.MONOSPACE);
             value.setTextColor(context.getColor(R.color.text_primary));
             value.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
-            value.setSingleLine(true);
-            value.setEllipsize(TextUtils.TruncateAt.END);
+            value.setMaxWidth(px(context, ROW_VALUE_MAX_PX));
             addView(value, new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
         }

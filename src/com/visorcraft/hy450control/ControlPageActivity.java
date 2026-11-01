@@ -26,6 +26,7 @@ public final class ControlPageActivity extends Activity {
     private static final float ROW_HEIGHT_PX = 112f;
     private static final float ROW_MARGIN_PX = 20f;
     private static final float TARGET_VALUE_PX = 76f;
+    private static final float TARGET_VALUE_MAX_PX = 800f;
     private static final float TARGET_LABEL_PX = 46f;
     private static final float MARKER_PX = 30f;
     private static final float HINT_PX = 32f;
@@ -170,6 +171,7 @@ public final class ControlPageActivity extends Activity {
         targetValue = Ui.text(this, "Select a control", TARGET_VALUE_PX, R.color.accent,
                 Typeface.MONOSPACE);
         targetValue.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
+        targetValue.setMaxWidth(Ui.px(this, TARGET_VALUE_MAX_PX));
         band.addView(targetValue, new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
         return band;

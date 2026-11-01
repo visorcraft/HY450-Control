@@ -40,6 +40,7 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle state) {
         super.onCreate(state);
         ScrollView scroll = new ScrollView(this);
+        scroll.setFocusable(false);
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         int margin = Ui.px(this, PAGE_MARGIN_PX);
@@ -168,8 +169,9 @@ public class MainActivity extends Activity {
 
     private void refreshLiveValues() {
         try {
-            Control backlight = ControlCatalog.picture(this).get(0);
-            showValue(lampValue, String.valueOf(backlight.adapter.read()));
+            VendorIntControl backlight = new VendorIntControl(
+                    Vendor.display(), "getBacklight", "setBacklight", null, 0, 255);
+            showValue(lampValue, String.valueOf(backlight.read()));
         } catch (Exception error) {
             showValue(lampValue, "Unavailable: " + Errors.describe(error), R.color.error);
         }

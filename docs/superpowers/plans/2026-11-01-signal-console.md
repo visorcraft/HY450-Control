@@ -177,7 +177,7 @@ Use a 560 px-wide graphite panel with shared focus chips, readable status, and a
 
 - [ ] **Step 3: Fix external-input focus and cleanup**
 
-Move Input source into a helper that calls `startActivity(NEW_TASK)` and then `stopSelf()`. `onDestroy` removes both Runnables, detaches only an attached panel, and nulls view references. Preserve `START_NOT_STICKY`, all vendor write/readback behavior, and existing status text.
+Move Input source into a helper that removes the timeout and ticker callbacks and detaches the overlay panel before it calls `startActivity(NEW_TASK)`, then calls `stopSelf()` afterwards; a missing or blocked OEM activity is reported with a visible Toast and the service still stops. `onDestroy` removes both Runnables, detaches only an attached panel, and nulls view references. Preserve `START_NOT_STICKY`, all vendor write/readback behavior, and existing status text.
 
 - [ ] **Step 4: Build and commit**
 

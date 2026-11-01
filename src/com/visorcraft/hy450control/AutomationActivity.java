@@ -171,19 +171,13 @@ public final class AutomationActivity extends Activity {
     }
 
     private void refresh() {
-        int remote = prefs.getInt("remote_key", KeyEvent.KEYCODE_MENU);
-        int remoteIndex = 0;
-        for (int i = 0; i < REMOTE_KEYS.length; i++) {
-            if (REMOTE_KEYS[i] == remote) remoteIndex = i;
-        }
         String startup = prefs.getString("startup_package", "");
         int startupIndex = 0;
         for (int i = 0; i < STARTUPS.length; i++) {
             if (STARTUPS[i].equals(startup)) startupIndex = i;
         }
         int sleep = prefs.getInt("sleep_minutes", 0);
-        status.setText("Shortcut: " + REMOTE_NAMES[remoteIndex]
-                + "  •  Startup: " + STARTUP_NAMES[startupIndex]
+        status.setText("Startup: " + STARTUP_NAMES[startupIndex]
                 + "  •  Sleep: " + (sleep == 0 ? "off" : sleep + " min"));
         startupRow.setValue(STARTUP_NAMES[startupIndex]);
         sleepRow.setValue(sleep == 0 ? "off" : sleep + " min");
