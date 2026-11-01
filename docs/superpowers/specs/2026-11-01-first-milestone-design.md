@@ -37,7 +37,7 @@ All actual writes continue through the adapters' existing range checks and write
 
 `ControlPageActivity` rebuilds its control list from the intent's family instead of relying on the static `pending` reference, so activity recreation does not depend on a surviving process. The start API carries only the title and family.
 
-The page contains Save, Apply, and Restore actions, a persistent status line, and rows for all discovered controls. Read-only rows are visible but cannot receive focus or adjustment keys. D-pad navigation skips them. At a limit, left/right/centre leaves the value unchanged and reports that the minimum or maximum was reached.
+The page contains Save, Apply, and Restore actions, a persistent status line, and rows for all discovered controls. Actions and rows occupy the scrollable area; the status line is a fixed footer outside that area so feedback remains visible while any row is adjusted. Read-only rows are visible but cannot receive focus or adjustment keys. D-pad navigation skips them. At a limit, left/right/centre leaves the value unchanged and reports that the minimum or maximum was reached.
 
 After every successful adjustment, the page re-reads and displays the actual adapter value. The status remains visible until the next operation rather than relying on a short toast. Failures identify the control and remain visible.
 

@@ -68,13 +68,6 @@ public final class ControlPageActivity extends Activity {
         saveButton = addAction(root, "Save current as preset", v -> savePreset());
         applyButton = addAction(root, "Apply saved preset", v -> applyPreset());
         restoreButton = addAction(root, "Restore original values", v -> restoreOriginals());
-        status = new TextView(this);
-        status.setText("Original values are backed up automatically");
-        status.setTextSize(18);
-        status.setTextColor(Color.LTGRAY);
-        status.setPadding(24, 20, 24, 20);
-        status.setFocusable(false);
-        root.addView(status);
         for (int i = 0; i < controls.size(); i++) {
             Control control = controls.get(i);
             TextView row = new TextView(this);
@@ -91,7 +84,17 @@ public final class ControlPageActivity extends Activity {
             rows.add(row);
         }
         scroll.addView(root);
-        setContentView(scroll);
+        LinearLayout outer = new LinearLayout(this);
+        outer.setOrientation(LinearLayout.VERTICAL);
+        outer.addView(scroll, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
+        status = new TextView(this);
+        status.setText("Original values are backed up automatically");
+        status.setTextSize(18);
+        status.setTextColor(Color.LTGRAY);
+        status.setPadding(24, 20, 24, 20);
+        status.setFocusable(false);
+        outer.addView(status);
+        setContentView(outer);
         if (loadError == null) {
             backupOriginals();
         } else {

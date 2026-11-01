@@ -175,7 +175,7 @@ private TextView status;
 private Button restoreButton;
 ```
 
-Add `restoreButton = addAction(root, "Restore original values", v -> restoreOriginals());` after the preset actions. Add a non-focusable status `TextView` below the actions with initial text `Original values are backed up automatically`, size 18, light-gray color, and enough padding for D-pad use.
+Add `restoreButton = addAction(root, "Restore original values", v -> restoreOriginals());` after the preset actions. Add a non-focusable status `TextView` with initial text `Original values are backed up automatically`, size 18, light-gray color, and enough padding for D-pad use. Keep actions and rows in the existing `ScrollView`, but place that scroll view and the status in a vertical outer `LinearLayout`: give the scroll view height `0` and weight `1`, then add the status after it as a fixed footer. Call `setContentView` on the outer layout so status feedback cannot scroll off-screen.
 
 For each row, use `row.setFocusable(control.adapter.isWritable())`. Attach a focus listener that updates `index` to that row when focused. Display values as:
 
