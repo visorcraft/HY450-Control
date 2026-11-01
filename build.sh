@@ -35,6 +35,13 @@ cp "$OUT/dex/classes.dex" "$OUT/classes.dex"
   --ks-pass "pass:$KEYSTORE_PASS" --key-pass "pass:$KEYSTORE_PASS" \
   --out hy450-control.apk "$OUT/app-unsigned.apk"
 "$BT/apksigner" verify --print-certs hy450-control.apk
-mkdir -p module/system/priv-app/HY450Control
+mkdir -p module/system/priv-app/HY450Control module/system/bin
 cp hy450-control.apk module/system/priv-app/HY450Control/HY450Control.apk
+NDK="${ANDROID_NDK_ROOT:-$HOME/Android/Sdk/ndk/27.0.12077973}"
+CC="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi34-clang"
+if [[ -x "$CC" ]]; then
+  bash capture/build.sh
+  cp capture/build/v4l2_capture module/system/bin/hy450-v4l2
+  chmod 755 module/system/bin/hy450-v4l2
+fi
 echo "built: hy450-control.apk"

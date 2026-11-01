@@ -24,6 +24,7 @@
             </intent-filter>
         </activity>
         <activity android:name=".CalibrationActivity" android:exported="false" />
+        <activity android:name=".RectangleActivity" android:exported="false" />
         <activity android:name=".ControlPageActivity" android:exported="false" />
         <activity android:name=".ProjectionActivity" android:exported="false" />
         <activity android:name=".AutomationActivity" android:exported="false" />

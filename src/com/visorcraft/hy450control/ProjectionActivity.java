@@ -32,9 +32,14 @@ public final class ProjectionActivity extends Activity {
             ProjectionBackup.restore(this);
             toast("Projection backup restored");
         }));
-        add(root, "OEM focus and correction", v -> component("com.hysd.vafocus", "com.hysd.vafocus.VajzActivity"));
-        add(root, "OEM manual keystone", v -> component("com.hysd.vafocus", "com.hysd.vafocus.TchjzActivity"));
+        add(root, "Square the image", v -> startActivity(new Intent(this, RectangleActivity.class)));
+        add(root, "OEM focus and correction", v -> OemFocus.launch(this));
+        add(root, "OEM manual keystone", v -> {
+            OemFocus.cancelRestore();
+            component("com.hysd.vafocus", "com.hysd.vafocus.TchjzActivity");
+        });
         add(root, "Full screen (reset keystone)", v -> run(() -> {
+            OemFocus.cancelRestore();
             ProjectionBackup.save(this);
             Class.forName("com.hysd.vafocus.PropertiesUtils")
                     .getMethod("keystone_reset", int.class).invoke(null, 1);
@@ -44,6 +49,11 @@ public final class ProjectionActivity extends Activity {
         scroll.addView(root);
         setContentView(scroll);
         root.getChildAt(1).requestFocus();
+    }
+
+    public void onResume() {
+        super.onResume();
+        OemFocus.onResume(this);
     }
 
     private void add(LinearLayout root, String title, View.OnClickListener action) {
