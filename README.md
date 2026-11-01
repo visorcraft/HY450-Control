@@ -215,7 +215,7 @@ The development-unit checks included:
 
 ## Release automation
 
-GitHub Actions builds and verifies the APK on every push to `main` and every
+GitHub Actions builds and verifies the APK on every push to `master` and every
 pull request. A pushed `v*` tag additionally creates a signed GitHub Release
 with the versioned APK and its SHA-256 checksum. The release job rejects a tag
 that does not match `module/module.prop`.
@@ -223,7 +223,7 @@ that does not match `module/module.prop`.
 To publish a new version:
 
 1. Update `version` and `versionCode` together in `module/module.prop`.
-2. Commit and push `main`, then wait for its build to pass.
+2. Commit and push `master`, then wait for its build to pass.
 3. Create and push an annotated `v<version>` tag.
 
 Release signing uses the stable `HY450_KEYSTORE_B64` repository secret so users
