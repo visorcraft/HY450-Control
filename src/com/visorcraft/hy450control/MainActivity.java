@@ -8,12 +8,12 @@ import android.graphics.Color;
 import android.os.Bundle;
 import android.util.DisplayMetrics;
 import android.view.Gravity;
+import android.view.View;
 import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
-import java.util.List;
 
 public class MainActivity extends Activity {
     @Override
@@ -36,14 +36,9 @@ public class MainActivity extends Activity {
         } catch (Exception error) {
             root.addView(text("Backlight unavailable: " + error.getMessage(), 18));
         }
-        try {
-            page(root, "Picture controls", "picture", ControlCatalog.picture(this));
-            page(root, "Audio controls", "audio", ControlCatalog.audio(this));
-            page(root, "Input controls", "source", ControlCatalog.source(this));
-        } catch (Exception error) {
-            Toast.makeText(this, "Hardware controls unavailable: " + error.getMessage(),
-                    Toast.LENGTH_LONG).show();
-        }
+        controlPage(root, "Picture controls", "picture");
+        controlPage(root, "Audio controls", "audio");
+        controlPage(root, "Input controls", "source");
         shortcut(root, "Automation and remote", new Intent(this, AutomationActivity.class));
         shortcut(root, "Projection and calibration", new Intent(this, ProjectionActivity.class));
         Button calibration = new Button(this);
@@ -57,15 +52,31 @@ public class MainActivity extends Activity {
         shortcut(root, "Android settings", "com.android.tv.settings", "com.android.tv.settings.MainSettings");
         scroll.addView(root);
         setContentView(scroll);
-        root.getChildAt(3).requestFocus();
+        focusFirst(root);
     }
 
-    private void page(LinearLayout root, String title, String family, List<Control> controls) {
+    private void controlPage(LinearLayout root, String title, String family) {
         Button button = new Button(this);
         button.setText(title);
         button.setTextSize(22);
-        button.setOnClickListener(v -> ControlPageActivity.start(this, title, family, controls));
+        try {
+            ControlPageActivity.loadControls(this, family);
+            button.setOnClickListener(v -> ControlPageActivity.start(this, title, family));
+        } catch (Exception error) {
+            button.setText(title + "\nUnavailable: " + error.getMessage());
+            button.setEnabled(false);
+        }
         root.addView(button);
+    }
+
+    private void focusFirst(LinearLayout root) {
+        for (int i = 0; i < root.getChildCount(); i++) {
+            View child = root.getChildAt(i);
+            if (child.isEnabled() && child.isFocusable()) {
+                child.requestFocus();
+                return;
+            }
+        }
     }
 
     private void shortcut(LinearLayout root, String title, Intent intent) {

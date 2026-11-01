@@ -11,7 +11,6 @@ import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
-import android.widget.Toast;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -19,8 +18,6 @@ import java.util.Map;
 import org.json.JSONObject;
 
 public final class ControlPageActivity extends Activity {
-    private static List<Control> pending;
-
     private final List<Control> controls = new ArrayList<>();
     private final List<TextView> rows = new ArrayList<>();
     private String family;
@@ -28,9 +25,17 @@ public final class ControlPageActivity extends Activity {
     private PresetStore presets;
     private Button saveButton;
     private Button applyButton;
+    private Button restoreButton;
+    private TextView status;
 
-    public static void start(Context context, String title, String family, List<Control> controls) {
-        pending = controls;
+    static List<Control> loadControls(Context context, String family) throws Exception {
+        if ("picture".equals(family)) return ControlCatalog.picture(context);
+        if ("audio".equals(family)) return ControlCatalog.audio(context);
+        if ("source".equals(family)) return ControlCatalog.source(context);
+        throw new IllegalArgumentException("Unknown control family");
+    }
+
+    public static void start(Context context, String title, String family) {
         Intent intent = new Intent(context, ControlPageActivity.class);
         intent.putExtra("title", title);
         intent.putExtra("family", family);
@@ -39,8 +44,13 @@ public final class ControlPageActivity extends Activity {
 
     public void onCreate(Bundle state) {
         super.onCreate(state);
-        controls.addAll(pending);
         family = getIntent().getStringExtra("family");
+        String loadError = null;
+        try {
+            controls.addAll(loadControls(this, family));
+        } catch (Exception error) {
+            loadError = error.getMessage();
+        }
         presets = new PresetStore(this);
         ScrollView scroll = new ScrollView(this);
         LinearLayout root = new LinearLayout(this);
@@ -57,20 +67,38 @@ public final class ControlPageActivity extends Activity {
         root.addView(help);
         saveButton = addAction(root, "Save current as preset", v -> savePreset());
         applyButton = addAction(root, "Apply saved preset", v -> applyPreset());
-        for (Control control : controls) {
+        restoreButton = addAction(root, "Restore original values", v -> restoreOriginals());
+        status = new TextView(this);
+        status.setText("Original values are backed up automatically");
+        status.setTextSize(18);
+        status.setTextColor(Color.LTGRAY);
+        status.setPadding(24, 20, 24, 20);
+        status.setFocusable(false);
+        root.addView(status);
+        for (int i = 0; i < controls.size(); i++) {
+            Control control = controls.get(i);
             TextView row = new TextView(this);
             row.setTextSize(22);
             row.setTextColor(Color.WHITE);
             row.setPadding(24, 20, 24, 20);
-            row.setFocusable(true);
+            row.setFocusable(control.adapter.isWritable());
             row.setBackgroundResource(android.R.drawable.list_selector_background);
+            final int position = i;
+            row.setOnFocusChangeListener((v, hasFocus) -> {
+                if (hasFocus) index = position;
+            });
             root.addView(row);
             rows.add(row);
         }
         scroll.addView(root);
         setContentView(scroll);
-        backupOriginals();
+        if (loadError == null) {
+            backupOriginals();
+        } else {
+            status.setText("Controls unavailable: " + loadError);
+        }
         refresh();
+        root.post(this::focusFirstRow);
     }
 
     private Button addAction(LinearLayout root, String title, View.OnClickListener action) {
@@ -82,22 +110,49 @@ public final class ControlPageActivity extends Activity {
         return button;
     }
 
+    private void focusFirstRow() {
+        for (int i = 0; i < rows.size(); i++) {
+            if (controls.get(i).adapter.isWritable()) {
+                index = i;
+                rows.get(i).requestFocus();
+                return;
+            }
+        }
+        saveButton.requestFocus();
+    }
+
     private void backupOriginals() {
+        Map<String, Integer> values = new HashMap<>();
+        List<String> failures = new ArrayList<>();
+        for (Control control : controls) {
+            if (!control.adapter.isWritable()) continue;
+            try {
+                values.put(control.id, control.adapter.read());
+            } catch (Exception error) {
+                failures.add(control.title + ": " + error.getMessage());
+            }
+        }
+        if (values.isEmpty()) {
+            String message = "No original values could be read • no snapshot was created";
+            if (!failures.isEmpty()) message = message + "\n" + join(failures);
+            status.setText(message);
+            return;
+        }
+        boolean written = false;
         try {
             BackupStore backups = new BackupStore(this);
             if (!backups.hasSnapshot(family)) {
-                Map<String, Integer> values = new HashMap<>();
-                for (Control control : controls) {
-                    try {
-                        values.put(control.id, control.adapter.read());
-                    } catch (Exception error) {
-                        throw new IllegalStateException(control.id + ": " + error.getMessage(), error);
-                    }
-                }
                 backups.snapshot(family, values);
+                written = true;
             }
         } catch (Exception error) {
-            toast("Backup failed: " + error.getMessage());
+            failures.add("Snapshot: " + error.getMessage());
+        }
+        if (!failures.isEmpty()) {
+            status.setText("Backup incomplete • " + failures.size() + " not backed up"
+                    + "\n" + join(failures));
+        } else if (written) {
+            status.setText("Original values backed up");
         }
     }
 
@@ -105,25 +160,62 @@ public final class ControlPageActivity extends Activity {
         for (int i = 0; i < controls.size(); i++) {
             Control control = controls.get(i);
             try {
-                rows.get(i).setText(control.title + "\n" + control.adapter.read());
+                rows.get(i).setText(control.title + "\n" + control.adapter.format(control.adapter.read()));
             } catch (Exception error) {
                 rows.get(i).setText(control.title + "\nUnavailable: " + error.getMessage());
             }
         }
-        if (!rows.isEmpty()) rows.get(index).requestFocus();
     }
 
     private void adjust(int direction) {
         Control control = controls.get(index);
+        if (!control.adapter.isWritable()) return;
         try {
             int current = control.adapter.read();
-            int next = current + direction;
-            if (next < control.adapter.min()) next = control.adapter.max();
-            if (next > control.adapter.max()) next = control.adapter.min();
-            control.adapter.write(next);
-            toast(control.title + ": " + next);
+            int next = control.adapter.clamp(current + direction);
+            if (next == current) {
+                String limit = direction < 0 ? "Minimum" : "Maximum";
+                status.setText(limit + " reached • " + control.title + ": "
+                        + control.adapter.format(current));
+            } else {
+                control.adapter.write(next);
+                int actual = control.adapter.read();
+                status.setText(control.title + ": " + control.adapter.format(actual)
+                        + " • read back OK");
+            }
         } catch (Exception error) {
-            toast(control.title + " failed: " + error.getMessage());
+            status.setText(control.title + " failed: " + error.getMessage());
+        }
+        refresh();
+    }
+
+    private void restoreOriginals() {
+        int restored = 0;
+        List<String> failures = new ArrayList<>();
+        try {
+            JSONObject stored = new BackupStore(this).readSnapshot(family)
+                    .getJSONObject("values");
+            for (Control control : controls) {
+                if (!control.adapter.isWritable()) continue;
+                if (!stored.has(control.id)) {
+                    failures.add(control.title + ": no saved value");
+                    continue;
+                }
+                try {
+                    control.adapter.write(stored.getInt(control.id));
+                    restored++;
+                } catch (Exception error) {
+                    failures.add(control.title + ": " + error.getMessage());
+                }
+            }
+            StringBuilder message = new StringBuilder("Restored " + restored + " values");
+            if (!failures.isEmpty()) {
+                message.append(" • ").append(failures.size()).append(" not restored");
+                for (String failure : failures) message.append("\n").append(failure);
+            }
+            status.setText(message.toString());
+        } catch (Exception error) {
+            status.setText("Restore unavailable: " + error.getMessage());
         }
         refresh();
     }
@@ -133,9 +225,9 @@ public final class ControlPageActivity extends Activity {
             Map<String, Integer> values = new HashMap<>();
             for (Control control : controls) values.put(control.id, control.adapter.read());
             presets.save(family, values);
-            toast("Preset saved");
+            status.setText("Preset saved");
         } catch (Exception error) {
-            toast("Save failed: " + error.getMessage());
+            status.setText("Save failed: " + error.getMessage());
         }
     }
 
@@ -145,9 +237,9 @@ public final class ControlPageActivity extends Activity {
             for (Control control : controls) {
                 if (stored.has(control.id)) control.adapter.write(stored.getInt(control.id));
             }
-            toast("Preset applied");
+            status.setText("Preset applied");
         } catch (Exception error) {
-            toast("Apply failed: " + error.getMessage());
+            status.setText("Apply failed: " + error.getMessage());
         }
         refresh();
     }
@@ -155,48 +247,29 @@ public final class ControlPageActivity extends Activity {
     public boolean onKeyDown(int code, KeyEvent event) {
         if (rows.isEmpty()) return super.onKeyDown(code, event);
         boolean rowFocused = rows.get(index).isFocused();
-        if (code == KeyEvent.KEYCODE_DPAD_UP && rowFocused && index == 0) {
-            applyButton.requestFocus();
-            return true;
-        }
-        if (code == KeyEvent.KEYCODE_DPAD_UP && applyButton.isFocused()) {
-            saveButton.requestFocus();
-            return true;
-        }
-        if (code == KeyEvent.KEYCODE_DPAD_DOWN && applyButton.isFocused()) {
-            rows.get(0).requestFocus();
-            return true;
-        }
-        if (code == KeyEvent.KEYCODE_DPAD_DOWN && saveButton.isFocused()) {
-            applyButton.requestFocus();
-            return true;
-        }
-        if (rowFocused && code == KeyEvent.KEYCODE_DPAD_UP && index > 0) {
-            index--;
-            refresh();
-            return true;
-        }
-        if (rowFocused && code == KeyEvent.KEYCODE_DPAD_DOWN && index < rows.size() - 1) {
-            index++;
-            refresh();
-            return true;
-        }
-        if (rowFocused && code == KeyEvent.KEYCODE_DPAD_LEFT) {
-            adjust(-1);
-            return true;
-        }
-        if (rowFocused && code == KeyEvent.KEYCODE_DPAD_RIGHT) {
-            adjust(1);
-            return true;
-        }
-        if (rowFocused && (code == KeyEvent.KEYCODE_DPAD_CENTER || code == KeyEvent.KEYCODE_ENTER)) {
-            adjust(1);
-            return true;
+        if (rowFocused && controls.get(index).adapter.isWritable()) {
+            if (code == KeyEvent.KEYCODE_DPAD_LEFT) {
+                adjust(-1);
+                return true;
+            }
+            if (code == KeyEvent.KEYCODE_DPAD_RIGHT) {
+                adjust(1);
+                return true;
+            }
+            if (code == KeyEvent.KEYCODE_DPAD_CENTER || code == KeyEvent.KEYCODE_ENTER) {
+                adjust(1);
+                return true;
+            }
         }
         return super.onKeyDown(code, event);
     }
 
-    private void toast(String message) {
-        Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
+    private String join(List<String> values) {
+        StringBuilder text = new StringBuilder();
+        for (String value : values) {
+            if (text.length() > 0) text.append("\n");
+            text.append(value);
+        }
+        return text.toString();
     }
 }
