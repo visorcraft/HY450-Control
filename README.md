@@ -58,8 +58,8 @@ Verified on the retail development unit (Android 14 build
 
 ## Quick start
 
-The current signed release is **v1.2.0** (version code **7**). Download
-`hy450-control-1.2.0.apk` and `sha256sums.txt` from the
+The current signed release is **v1.3.0** (version code **8**). Download
+`hy450-control-1.3.0.apk` and `sha256sums.txt` from the
 [latest GitHub release](https://github.com/visorcraft/HY450-Control/releases/latest)
 into the same directory, then verify the download:
 
@@ -71,7 +71,7 @@ In a source checkout, place the downloaded APK in the Magisk module:
 
 ```bash
 mkdir -p module/system/priv-app/HY450Control
-cp /path/to/hy450-control-1.2.0.apk \
+cp /path/to/hy450-control-1.3.0.apk \
   module/system/priv-app/HY450Control/HY450Control.apk
 ```
 
@@ -156,6 +156,9 @@ partition, remove another module, or reset the projector.
   removed. Do not treat the remote page as a working remapper.
 - **Boot-default input is read-only.** The firmware exposes a getter but no
   compatible setter.
+- **Input preset application can fail on this firmware.** Saving succeeds, but
+  the reported current-input value can be outside the writable adapter range,
+  causing `Out of range`; the original-input snapshot remains restorable.
 - **Factory distortion recognition is not claimed as fixed.** The normal
   ceiling autofocus/calibration path is separate from that factory diagnostic.
 - **The built-in camera cannot see a wall trapezoid.** It looks along the
