@@ -19,15 +19,39 @@ final class ProjectionBackup {
         "persist.display.keystone_zoom_h", "persist.display.keystone_zoom_v"
     };
 
+    interface ValueAccess {
+        String getGlobal(String key) throws Exception;
+        void putGlobal(String key, String value) throws Exception;
+        String getProperty(String key) throws Exception;
+        void putProperty(String key, String value) throws Exception;
+    }
+
     static void save(Context context) throws Exception {
         JSONObject root = new JSONObject();
         root.put("schema", 1);
         root.put("firmware", android.os.Build.FINGERPRINT);
-        JSONObject values = new JSONObject();
-        for (String key : GLOBAL) values.put("global:" + key, Settings.Global.getString(
-                context.getContentResolver(), key));
-        for (String key : PROPERTIES) values.put("property:" + key, property("get", key));
-        root.put("values", values);
+        root.put("values", captureValues(new ValueAccess() {
+            @Override
+            public String getGlobal(String key) {
+                return Settings.Global.getString(context.getContentResolver(), key);
+            }
+
+            @Override
+            public void putGlobal(String key, String value) {
+                Settings.Global.putString(context.getContentResolver(), key, value);
+            }
+
+            @Override
+            public String getProperty(String key) throws Exception {
+                return property("get", key);
+            }
+
+            @Override
+            public void putProperty(String key, String value) throws Exception {
+                Class<?> type = Class.forName("android.os.SystemProperties");
+                type.getMethod("set", String.class, String.class).invoke(null, key, value);
+            }
+        }));
         File target = new File(context.getFilesDir(), "projection-backup.json");
         File temporary = new File(context.getFilesDir(), "projection-backup.tmp");
         FileOutputStream output = new FileOutputStream(temporary);
@@ -42,6 +66,65 @@ final class ProjectionBackup {
 
     static void restore(Context context) throws Exception {
         File source = new File(context.getFilesDir(), "projection-backup.json");
+        restoreValues(readBackup(source), new ValueAccess() {
+            @Override
+            public String getGlobal(String key) {
+                return Settings.Global.getString(context.getContentResolver(), key);
+            }
+
+            @Override
+            public void putGlobal(String key, String value) {
+                Settings.Global.putString(context.getContentResolver(), key, value);
+            }
+
+            @Override
+            public String getProperty(String key) throws Exception {
+                return property("get", key);
+            }
+
+            @Override
+            public void putProperty(String key, String value) throws Exception {
+                Class<?> type = Class.forName("android.os.SystemProperties");
+                type.getMethod("set", String.class, String.class).invoke(null, key, value);
+            }
+        });
+    }
+
+    static JSONObject captureValues(ValueAccess access) throws Exception {
+        JSONObject values = new JSONObject();
+        for (String key : GLOBAL) {
+            String value = access.getGlobal(key);
+            values.put("global:" + key, value == null ? JSONObject.NULL : value);
+        }
+        for (String key : PROPERTIES) values.put("property:" + key, access.getProperty(key));
+        return values;
+    }
+
+    static void restoreValues(JSONObject values, ValueAccess access) throws Exception {
+        Iterator<String> keys = values.keys();
+        while (keys.hasNext()) {
+            String storedKey = keys.next();
+            Object stored = values.get(storedKey);
+            if (storedKey.startsWith("global:")) {
+                String key = storedKey.substring(7);
+                String expected = stored == JSONObject.NULL ? null : (String) stored;
+                access.putGlobal(key, expected);
+                String actual = access.getGlobal(key);
+                if (expected == null ? actual != null : !expected.equals(actual)) {
+                    throw new IllegalStateException("Readback failed: " + key);
+                }
+            } else {
+                String key = storedKey.substring(9);
+                if (stored == JSONObject.NULL) throw new IllegalStateException("Null property: " + key);
+                String expected = (String) stored;
+                access.putProperty(key, expected);
+                String actual = access.getProperty(key);
+                if (!expected.equals(actual)) throw new IllegalStateException("Readback failed: " + key);
+            }
+        }
+    }
+
+    static JSONObject readBackup(File source) throws Exception {
         byte[] data = new byte[(int) source.length()];
         FileInputStream input = new FileInputStream(source);
         try {
@@ -59,24 +142,7 @@ final class ProjectionBackup {
         if (!android.os.Build.FINGERPRINT.equals(root.getString("firmware"))) {
             throw new IllegalStateException("Firmware mismatch");
         }
-        JSONObject values = root.getJSONObject("values");
-        Iterator<String> keys = values.keys();
-        while (keys.hasNext()) {
-            String storedKey = keys.next();
-            String expected = values.getString(storedKey);
-            if (storedKey.startsWith("global:")) {
-                String key = storedKey.substring(7);
-                Settings.Global.putString(context.getContentResolver(), key, expected);
-                String actual = Settings.Global.getString(context.getContentResolver(), key);
-                if (!expected.equals(actual)) throw new IllegalStateException("Readback failed: " + key);
-            } else {
-                String key = storedKey.substring(9);
-                Class<?> type = Class.forName("android.os.SystemProperties");
-                type.getMethod("set", String.class, String.class).invoke(null, key, expected);
-                String actual = (String) type.getMethod("get", String.class).invoke(null, key);
-                if (!expected.equals(actual)) throw new IllegalStateException("Readback failed: " + key);
-            }
-        }
+        return root.getJSONObject("values");
     }
 
     private static String property(String method, String key) throws Exception {

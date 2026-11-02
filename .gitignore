@@ -1,4 +1,5 @@
 build/
+tests/build/
 *.apk
 *.idsig
 capture/build/
