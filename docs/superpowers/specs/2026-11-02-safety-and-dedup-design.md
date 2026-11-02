@@ -12,7 +12,7 @@ This change does not redesign the UI, change the version, publish a release, or 
 
 Keep projection backup schema 1 so existing backups remain readable. When a `Settings.Global` value is absent, store `JSONObject.NULL` instead of passing Java `null` to `JSONObject.put`, which would omit the key. Empty strings and non-empty strings remain unchanged.
 
-During restore, distinguish an explicit null from a string. Restore an absent global with `Settings.Global.putString(..., null)` and verify that readback is null. Restore empty and non-empty strings as before. System-property behavior remains unchanged.
+During restore, distinguish an explicit null from a string. Restore an absent global by deleting its row through the `Settings.Global` content URI and verify that readback is null. Restore empty and non-empty strings with `Settings.Global.putString` as before. System-property behavior remains unchanged.
 
 Introduce a narrow value-access seam around global/property reads and writes so backup and restore logic can be exercised with fake values on Android without changing real settings. Production callers retain firmware validation and private-file storage.
 
@@ -80,4 +80,8 @@ Run the focused host tests, device-side fake-data tests, all shell syntax checks
 
 On the projector, first verify installation and save/read original projection state. Exercise OEM-focus return normally and after killing the HY450 Control process while the OEM activity is open; confirm exact keystone recovery and pending-marker cleanup. Verify explicit cancellation does not later restore stale state. Apply a preset with a deliberate fake failure in tests rather than risking an invalid hardware input. Confirm Projectivy startup/accessibility and existing framework patches remain untouched.
 
-Documentation that describes backup, preset, testing, or release-debugging behavior must be updated to match the final implementation. No commit beyond the design/plan commits, push, version bump, tag, or GitHub release is assumed by this design.
+Documentation that describes backup, preset, testing, or release-debugging behavior must be updated to match the final implementation. The design does not require a version bump, tag, or GitHub release.
+
+## Implementation outcome
+
+Implemented and reviewed through `cb20e75c116db0c77c08140081ce2f00f1842416`. Host tests, Android fake-data tests, shell checks, and the signed/non-debuggable build passed. On hardware, ordinary OEM recovery, process death followed by explicit app recreation, and immediate manual-keystone cancellation all restored or preserved exact projection values and cleared pending recovery. Final restoration matched the complete original baseline; Projectivy startup/accessibility, sleep-off state, and the framework patch remained unchanged.

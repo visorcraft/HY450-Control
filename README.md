@@ -179,6 +179,9 @@ partition, remove another module, or reset the projector.
 - **Input preset application can fail on this firmware.** Saving succeeds, but
   the reported current-input value can be outside the writable adapter range,
   causing `Out of range`; the original-input snapshot remains restorable.
+- **Process death removes the app's activity stack.** If BACK from OEM focus
+  returns to another app after HY450 Control was killed, reopen HY450 Control
+  to run the durable pending recovery; the marker remains until that resume.
 - **Factory distortion recognition is not claimed as fixed.** The normal
   ceiling autofocus/calibration path is separate from that factory diagnostic.
 - **The built-in camera cannot see a wall trapezoid.** It looks along the
@@ -197,6 +200,7 @@ partition, remove another module, or reset the projector.
 | `res/` + `AndroidManifest.xml` | App resources, component declarations, and privileged permission requests. |
 | `module/` | Magisk metadata and priv-app permission allowlist. The generated APK is excluded. |
 | `build.sh` | SDK-only Java 8/APK build and debug signing; no Gradle or third-party runtime libraries. |
+| `tests/` | Plain-JVM host and Android `app_process` fake-data regression suites with explicit-device adb runner. |
 | `install.sh` / `uninstall.sh` | Explicit-device Magisk module installation and removal. |
 | `capture/` | Original ARMv7 V4L2 camera diagnostic and frame-capture scripts. |
 | `probe/TvProbe.java` | Small read-only-by-default Allwinner display API probe used for hardware validation. |
@@ -231,6 +235,11 @@ temperature, gamma, and dynamic-backlight values.
 
 ## Verified on hardware
 
+The post-release safety and de-duplication source through `cb20e75` was also
+installed and verified on the development unit. This local candidate is
+distinct from the signed v1.3.0 release artifact, although both report version
+1.3.0/versionCode 8.
+
 The development-unit checks included:
 
 - Backlight write/readback/restore (`100 → 101 → 100`).
@@ -240,6 +249,9 @@ The development-unit checks included:
 - Partial audio backup/restore continuing past unsupported controls, with restored/failed counts and capped error details.
 - EQ-band and input-freeze writes followed by restoration.
 - Projection JSON backup/restore without changing keystone.
+- Host and Android fake-data regression suites passed, covering absent/empty/non-empty globals, legacy schema-1 backups, snapshot non-overwrite, strict keystone parsing, preset continuation, and adapter rollback.
+- Ordinary OEM-focus recovery, process death followed by explicit app recreation, and immediate manual-keystone cancellation restored or preserved every inset and zoom value and cleared pending recovery. Final projection restoration matched the complete original baseline.
+- The installed post-release candidate reported 1.3.0/versionCode 8 without the `DEBUGGABLE` package flag; Projectivy startup/accessibility, sleep-off state, the framework patch, and disabled-package set remained unchanged.
 - Quick-overlay D-pad write/readback (`100 → 101 → 100`), BACK dismissal with focus restored, countdown rearm, 15-second automatic dismissal, and OEM input-source launch with the overlay already detached.
 - All six calibration patterns rendered fullscreen, pattern navigation, and BACK exit.
 - Signal Console screens inspected at 1920×1080, including focused/disabled rails and wrapped long values; every dashboard destination was reachable in at most four D-pad presses.
