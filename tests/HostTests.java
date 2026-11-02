@@ -85,6 +85,7 @@ public final class HostTests {
         ControlBatch.Result missingStored = ControlBatch.apply(Arrays.asList(last), values);
         check(missingStored.applied == 0 && missingStored.failures.isEmpty(),
                 "missing stored ID must be skipped without failure");
+        check(lastAdapter.writeCalls == 1, "missing stored ID must not write adapter");
 
         boolean immutable = false;
         try {
