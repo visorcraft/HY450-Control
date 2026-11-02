@@ -45,7 +45,7 @@ Host-side plain-JVM tests compile against Android platform 34 and cover:
 - Integer, boolean, and enum adapter success, bounds rejection, initial-read failure, setter failure, readback mismatch with rollback, and rollback failure using fake vendor managers.
 - Batch application continuing after a middle-control failure, skipping read-only and missing entries, and returning accurate applied/failed counts and details.
 - Strict keystone parsing through an injectable property-read seam, including valid decimal-compatible inset values, missing values, malformed values, and non-finite zoom.
-- Shared atomic file-helper read/write and failure behavior where practical without Android runtime stubs.
+- Shared atomic file-helper round trips, replacement, missing-file failures, and read/write failures using temporary directories.
 
 Device-side `app_process` tests use Android's real `org.json` implementation and fake value access to cover:
 
