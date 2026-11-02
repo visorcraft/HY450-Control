@@ -26,9 +26,6 @@ public final class HostTests {
             }
 
             @Override
-            public boolean isAvailable() { return true; }
-
-            @Override
             public int read() { return lastWritten; }
 
             @Override
@@ -94,6 +91,8 @@ public final class HostTests {
             immutable = true;
         }
         check(immutable, "failure details must be immutable");
+
+        testVendorAdapters();
 
         Map<String, String> valid = validValues();
         Keystone.PropertyReader validReader = valid::get;
@@ -180,6 +179,272 @@ public final class HostTests {
         }
 
         System.out.println("Host tests passed");
+    }
+
+    private static void testVendorAdapters() throws Exception {
+        check(ControlAdapter.class.isAssignableFrom(VendorControl.class),
+                "VendorControl must implement ControlAdapter");
+        check(java.lang.reflect.Modifier.isAbstract(VendorControl.class.getModifiers()),
+                "VendorControl must be abstract");
+        check(java.lang.reflect.Modifier.isFinal(
+                        VendorControl.class.getMethod("write", int.class).getModifiers()),
+                "VendorControl write must be final");
+        check(java.lang.reflect.Modifier.isAbstract(
+                        VendorControl.class.getDeclaredMethod("rawWrite", int.class).getModifiers()),
+                "VendorControl rawWrite must be abstract");
+
+        testVendorIntControls(null, "integer");
+        testVendorIntControls("speaker", "parameterized integer");
+        testVendorBooleanControls();
+        testVendorEnumControls();
+    }
+
+    private static void testVendorIntControls(Object parameter, String label) throws Exception {
+        FakeIntManager manager = new FakeIntManager(5);
+        VendorIntControl control = new VendorIntControl(
+                manager, "getValue", "setValue", parameter, 0, 10);
+        check(control.min() == 0 && control.max() == 10, label + " range");
+        control.write(7);
+        check(manager.value == 7, label + " successful write");
+        check(manager.setCalls == 1, label + " successful setter count");
+        check(parameter == null || parameter.equals(manager.parameter),
+                label + " parameter must reach manager");
+
+        manager = new FakeIntManager(5);
+        control = new VendorIntControl(manager, "getValue", "setValue", parameter, 0, 10);
+        VendorIntControl boundsControl = control;
+        expectThrows(() -> boundsControl.write(-1), label + " lower bound");
+        expectThrows(() -> boundsControl.write(11), label + " upper bound");
+        check(manager.setCalls == 0, label + " bounds must not call setter");
+
+        manager = new FakeIntManager(5);
+        manager.readFailure = true;
+        control = new VendorIntControl(manager, "getValue", "setValue", parameter, 0, 10);
+        VendorIntControl readFailureControl = control;
+        expectThrows(() -> readFailureControl.write(7), label + " initial read failure");
+        check(manager.setCalls == 0, label + " read failure must not call setter");
+
+        manager = new FakeIntManager(5);
+        manager.setterFailure = true;
+        control = new VendorIntControl(manager, "getValue", "setValue", parameter, 0, 10);
+        VendorIntControl setterFailureControl = control;
+        expectThrows(() -> setterFailureControl.write(7), label + " setter failure");
+        check(manager.setCalls == 1 && manager.value == 5,
+                label + " setter failure must not roll back");
+
+        manager = new FakeIntManager(5);
+        manager.mismatch = true;
+        control = new VendorIntControl(manager, "getValue", "setValue", parameter, 0, 10);
+        VendorIntControl mismatchControl = control;
+        expectThrows(() -> mismatchControl.write(7), label + " readback mismatch");
+        check(manager.value == 5, label + " mismatch must roll back");
+        check(manager.setCalls == 2, label + " write plus rollback");
+
+        manager = new FakeIntManager(5);
+        manager.mismatch = true;
+        manager.rollbackFailure = true;
+        control = new VendorIntControl(manager, "getValue", "setValue", parameter, 0, 10);
+        VendorIntControl rollbackFailureControl = control;
+        expectThrows(() -> rollbackFailureControl.write(7), label + " rollback failure");
+        check(manager.setCalls == 2, label + " rollback failure setter count");
+    }
+
+    private static void testVendorBooleanControls() throws Exception {
+        FakeBooleanManager manager = new FakeBooleanManager(false);
+        VendorBooleanControl control = new VendorBooleanControl(manager, "getValue", "setValue");
+        check(control.min() == 0 && control.max() == 1, "boolean range");
+        check(control.format(0).equals("Off") && control.format(1).equals("On"),
+                "boolean formatting");
+        control.write(1);
+        check(manager.value, "boolean successful write");
+        check(manager.setCalls == 1, "boolean successful setter count");
+
+        manager = new FakeBooleanManager(false);
+        control = new VendorBooleanControl(manager, "getValue", "setValue");
+        VendorBooleanControl boundsControl = control;
+        expectThrows(() -> boundsControl.write(-1), "boolean lower bound");
+        expectThrows(() -> boundsControl.write(2), "boolean upper bound");
+        check(manager.setCalls == 0, "boolean bounds must not call setter");
+
+        manager = new FakeBooleanManager(false);
+        manager.readFailure = true;
+        control = new VendorBooleanControl(manager, "getValue", "setValue");
+        VendorBooleanControl readFailureControl = control;
+        expectThrows(() -> readFailureControl.write(1), "boolean initial read failure");
+        check(manager.setCalls == 0, "boolean read failure must not call setter");
+
+        manager = new FakeBooleanManager(false);
+        manager.setterFailure = true;
+        control = new VendorBooleanControl(manager, "getValue", "setValue");
+        VendorBooleanControl setterFailureControl = control;
+        expectThrows(() -> setterFailureControl.write(1), "boolean setter failure");
+        check(manager.setCalls == 1 && !manager.value,
+                "boolean setter failure must not roll back");
+
+        manager = new FakeBooleanManager(false);
+        manager.mismatch = true;
+        control = new VendorBooleanControl(manager, "getValue", "setValue");
+        VendorBooleanControl mismatchControl = control;
+        expectThrows(() -> mismatchControl.write(1), "boolean readback mismatch");
+        check(!manager.value, "boolean mismatch must roll back");
+        check(manager.setCalls == 2, "boolean write plus rollback");
+
+        manager = new FakeBooleanManager(false);
+        manager.mismatch = true;
+        manager.rollbackFailure = true;
+        control = new VendorBooleanControl(manager, "getValue", "setValue");
+        VendorBooleanControl rollbackFailureControl = control;
+        expectThrows(() -> rollbackFailureControl.write(1), "boolean rollback failure");
+        check(manager.setCalls == 2, "boolean rollback failure setter count");
+    }
+
+    private static void testVendorEnumControls() throws Exception {
+        FakeEnumManager manager = new FakeEnumManager(FakeMode.E_AW_FIRST_MODE);
+        VendorEnumControl control = new VendorEnumControl(manager, "getValue", "setValue",
+                FakeMode.class, FakeMode.values());
+        check(control.min() == 0 && control.max() == 2, "enum range");
+        check(control.format(2).equals("Third Mode"), "enum formatting");
+        control.write(2);
+        check(manager.value == FakeMode.E_AW_THIRD_MODE, "enum successful write");
+        check(manager.setCalls == 1, "enum successful setter count");
+
+        manager = new FakeEnumManager(FakeMode.E_AW_FIRST_MODE);
+        control = new VendorEnumControl(manager, "getValue", "setValue",
+                FakeMode.class, FakeMode.values());
+        VendorEnumControl boundsControl = control;
+        expectThrows(() -> boundsControl.write(-1), "enum lower bound");
+        expectThrows(() -> boundsControl.write(3), "enum upper bound");
+        check(manager.setCalls == 0, "enum bounds must not call setter");
+
+        manager = new FakeEnumManager(FakeMode.E_AW_FIRST_MODE);
+        manager.readFailure = true;
+        control = new VendorEnumControl(manager, "getValue", "setValue",
+                FakeMode.class, FakeMode.values());
+        VendorEnumControl readFailureControl = control;
+        expectThrows(() -> readFailureControl.write(2), "enum initial read failure");
+        check(manager.setCalls == 0, "enum read failure must not call setter");
+
+        manager = new FakeEnumManager(FakeMode.E_AW_FIRST_MODE);
+        manager.setterFailure = true;
+        control = new VendorEnumControl(manager, "getValue", "setValue",
+                FakeMode.class, FakeMode.values());
+        VendorEnumControl setterFailureControl = control;
+        expectThrows(() -> setterFailureControl.write(2), "enum setter failure");
+        check(manager.setCalls == 1 && manager.value == FakeMode.E_AW_FIRST_MODE,
+                "enum setter failure must not roll back");
+
+        manager = new FakeEnumManager(FakeMode.E_AW_FIRST_MODE);
+        manager.mismatch = true;
+        control = new VendorEnumControl(manager, "getValue", "setValue",
+                FakeMode.class, FakeMode.values());
+        VendorEnumControl mismatchControl = control;
+        expectThrows(() -> mismatchControl.write(2), "enum readback mismatch");
+        check(manager.value == FakeMode.E_AW_FIRST_MODE, "enum mismatch must roll back");
+        check(manager.setCalls == 2, "enum write plus rollback");
+
+        manager = new FakeEnumManager(FakeMode.E_AW_FIRST_MODE);
+        manager.mismatch = true;
+        manager.rollbackFailure = true;
+        control = new VendorEnumControl(manager, "getValue", "setValue",
+                FakeMode.class, FakeMode.values());
+        VendorEnumControl rollbackFailureControl = control;
+        expectThrows(() -> rollbackFailureControl.write(2), "enum rollback failure");
+        check(manager.setCalls == 2, "enum rollback failure setter count");
+    }
+
+    public static final class FakeIntManager {
+        int value;
+        int setCalls;
+        String parameter;
+        boolean readFailure;
+        boolean setterFailure;
+        boolean mismatch;
+        boolean rollbackFailure;
+
+        FakeIntManager(int value) {
+            this.value = value;
+        }
+
+        public int getValue() throws Exception {
+            if (readFailure) throw new Exception("read failure");
+            return value;
+        }
+
+        public int getValue(String parameter) throws Exception {
+            this.parameter = parameter;
+            return getValue();
+        }
+
+        public void setValue(int value) throws Exception {
+            setCalls++;
+            if (setterFailure) throw new Exception("setter failure");
+            if (mismatch && setCalls == 1) return;
+            if (rollbackFailure && setCalls == 2) throw new Exception("rollback failure");
+            this.value = value;
+        }
+
+        public void setValue(String parameter, int value) throws Exception {
+            this.parameter = parameter;
+            setValue(value);
+        }
+    }
+
+    public static final class FakeBooleanManager {
+        boolean value;
+        int setCalls;
+        boolean readFailure;
+        boolean setterFailure;
+        boolean mismatch;
+        boolean rollbackFailure;
+
+        FakeBooleanManager(boolean value) {
+            this.value = value;
+        }
+
+        public boolean getValue() throws Exception {
+            if (readFailure) throw new Exception("read failure");
+            return value;
+        }
+
+        public void setValue(boolean value) throws Exception {
+            setCalls++;
+            if (setterFailure) throw new Exception("setter failure");
+            if (mismatch && setCalls == 1) return;
+            if (rollbackFailure && setCalls == 2) throw new Exception("rollback failure");
+            this.value = value;
+        }
+    }
+
+    public enum FakeMode {
+        E_AW_FIRST_MODE,
+        E_AW_SECOND_MODE,
+        E_AW_THIRD_MODE
+    }
+
+    public static final class FakeEnumManager {
+        FakeMode value;
+        int setCalls;
+        boolean readFailure;
+        boolean setterFailure;
+        boolean mismatch;
+        boolean rollbackFailure;
+
+        FakeEnumManager(FakeMode value) {
+            this.value = value;
+        }
+
+        public FakeMode getValue() throws Exception {
+            if (readFailure) throw new Exception("read failure");
+            return value;
+        }
+
+        public void setValue(FakeMode value) throws Exception {
+            setCalls++;
+            if (setterFailure) throw new Exception("setter failure");
+            if (mismatch && setCalls == 1) return;
+            if (rollbackFailure && setCalls == 2) throw new Exception("rollback failure");
+            this.value = value;
+        }
     }
 
     private static void writeFile(java.io.File target, String value) throws Exception {

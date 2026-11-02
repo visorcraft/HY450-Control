@@ -108,7 +108,7 @@ public final class OverlayService extends Service {
 
         VendorIntControl backlight;
         try {
-            backlight = new VendorIntControl(Vendor.display(), "getBacklight", "setBacklight", null, 0, 255);
+            backlight = ControlCatalog.backlight();
         } catch (Exception error) {
             stopSelf();
             return;

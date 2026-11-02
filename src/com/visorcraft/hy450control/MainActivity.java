@@ -171,8 +171,7 @@ public class MainActivity extends Activity {
 
     private void refreshLiveValues() {
         try {
-            VendorIntControl backlight = new VendorIntControl(
-                    Vendor.display(), "getBacklight", "setBacklight", null, 0, 255);
+            VendorIntControl backlight = ControlCatalog.backlight();
             showValue(lampValue, String.valueOf(backlight.read()));
         } catch (Exception error) {
             showValue(lampValue, "Unavailable: " + Errors.describe(error), R.color.error);

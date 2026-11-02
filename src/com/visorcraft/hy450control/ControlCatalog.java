@@ -5,11 +5,14 @@ import java.util.ArrayList;
 import java.util.List;
 
 final class ControlCatalog {
+    static VendorIntControl backlight() throws Exception {
+        return new VendorIntControl(Vendor.display(), "getBacklight", "setBacklight", null, 0, 255);
+    }
+
     static List<Control> picture(Context context) throws Exception {
         List<Control> result = new ArrayList<>();
         Object manager = Vendor.display();
-        result.add(new Control("display.backlight", "Backlight",
-                new VendorIntControl(manager, "getBacklight", "setBacklight", null, 0, 255)));
+        result.add(new Control("display.backlight", "Backlight", backlight()));
         addBasic(result, manager, "Brightness", "E_AW_PQ_BASIC_TYPE_BRIGHTNESS");
         addBasic(result, manager, "Contrast", "E_AW_PQ_BASIC_TYPE_CONTRAST");
         addBasic(result, manager, "Hue", "E_AW_PQ_BASIC_TYPE_HUE");

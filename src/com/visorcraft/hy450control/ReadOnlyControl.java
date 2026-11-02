@@ -9,7 +9,6 @@ public final class ReadOnlyControl implements ControlAdapter {
         this.getter = getter;
     }
 
-    public boolean isAvailable() { return true; }
     public int min() { return 0; }
     public int max() { return 0; }
 

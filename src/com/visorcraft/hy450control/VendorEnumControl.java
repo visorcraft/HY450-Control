@@ -1,28 +1,14 @@
 package com.visorcraft.hy450control;
 
-public final class VendorEnumControl implements ControlAdapter {
-    private final Object manager;
-    private final String getter;
-    private final String setter;
+public final class VendorEnumControl extends VendorControl {
     private final Class<?> enumType;
     private final Object[] values;
 
     public VendorEnumControl(Object manager, String getter, String setter,
             Class<?> enumType, Object[] values) {
-        this.manager = manager;
-        this.getter = getter;
-        this.setter = setter;
+        super(manager, getter, setter);
         this.enumType = enumType;
         this.values = values;
-    }
-
-    public boolean isAvailable() {
-        try {
-            read();
-            return true;
-        } catch (Exception error) {
-            return false;
-        }
     }
 
     public int min() { return 0; }
@@ -52,13 +38,7 @@ public final class VendorEnumControl implements ControlAdapter {
         throw new IllegalStateException("Unknown enum value: " + current);
     }
 
-    public void write(int value) throws Exception {
-        if (value < min() || value > max()) throw new IllegalArgumentException("Out of range");
-        int original = read();
+    protected void rawWrite(int value) throws Exception {
         Vendor.call(manager, setter, new Class<?>[]{enumType}, values[value]);
-        if (read() != value) {
-            Vendor.call(manager, setter, new Class<?>[]{enumType}, values[original]);
-            throw new IllegalStateException("Readback mismatch");
-        }
     }
 }
