@@ -51,7 +51,7 @@ public class MainActivity extends Activity {
         root.addView(identityBand());
         root.addView(liveBand());
 
-        root.addView(section("TUNE"));
+        root.addView(Ui.section(this, "TUNE", GAP_PX));
         LinearLayout tune = row();
         pictureTile = familyTile(tune, "Picture", "picture");
         familyTile(tune, "Audio", "audio");
@@ -62,7 +62,7 @@ public class MainActivity extends Activity {
                 v -> startActivity(new Intent(this, ProjectionActivity.class)));
         root.addView(tuneSecond);
 
-        root.addView(section("AUTOMATE"));
+        root.addView(Ui.section(this, "AUTOMATE", GAP_PX));
         LinearLayout automate = row();
         destinationTile(automate, "Automation & power", "Startup and sleep",
                 v -> startActivity(new Intent(this, AutomationActivity.class)));
@@ -70,7 +70,7 @@ public class MainActivity extends Activity {
                 v -> startService(new Intent(this, OverlayService.class)));
         root.addView(automate);
 
-        root.addView(section("ADVANCED · OEM TOOLS"));
+        root.addView(Ui.section(this, "ADVANCED · OEM TOOLS", GAP_PX));
         LinearLayout tools = row();
         oemTool(tools, "OEM input source", "com.softwinner.awsource",
                 "com.softwinner.awsource.MainActivity");
@@ -192,16 +192,6 @@ public class MainActivity extends Activity {
     private void showValue(TextView view, String value, int colorRes) {
         view.setText(value);
         view.setTextColor(getColor(colorRes));
-    }
-
-    private TextView section(String label) {
-        TextView kicker = Ui.kicker(this, label);
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        params.topMargin = Ui.px(this, 20f);
-        params.bottomMargin = Ui.px(this, 8f);
-        kicker.setLayoutParams(params);
-        return kicker;
     }
 
     private LinearLayout row() {

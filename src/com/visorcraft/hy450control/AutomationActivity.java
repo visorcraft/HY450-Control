@@ -49,7 +49,7 @@ public final class AutomationActivity extends Activity {
         root.setPadding(margin, margin, margin, margin);
 
         root.addView(Ui.kicker(this, "VISORCRAFT · HY450 MAX"));
-        root.addView(note("D-pad moves • centre activates", HINT_PX,
+        root.addView(Ui.note(this, "D-pad moves • centre activates", HINT_PX,
                 R.color.text_tertiary));
         status = Ui.text(this, "", STATUS_PX, R.color.text_secondary, Typeface.MONOSPACE);
         LinearLayout.LayoutParams statusParams = new LinearLayout.LayoutParams(
@@ -59,14 +59,14 @@ public final class AutomationActivity extends Activity {
         status.setLayoutParams(statusParams);
         root.addView(status);
 
-        root.addView(section("OVERLAY"));
-        LinearLayout overlay = chipRow(root);
-        openOverlayButton = addChip(overlay, "Open quick overlay",
-                v -> startService(new Intent(this, OverlayService.class)));
-        addChip(overlay, "Close overlay",
-                v -> stopService(new Intent(this, OverlayService.class)));
+        root.addView(Ui.section(this, "OVERLAY", GAP_PX));
+        LinearLayout overlay = Ui.chipRow(root, GAP_PX);
+        openOverlayButton = Ui.addChip(overlay, "Open quick overlay",
+                v -> startService(new Intent(this, OverlayService.class)), GAP_PX);
+        Ui.addChip(overlay, "Close overlay",
+                v -> stopService(new Intent(this, OverlayService.class)), GAP_PX);
 
-        root.addView(section("AUTOMATION"));
+        root.addView(Ui.section(this, "AUTOMATION", GAP_PX));
         startupRow = addRow(root, "Startup app", v -> cycle("startup", STARTUPS.length, index -> {
             prefs.edit().putString("startup_package", STARTUPS[index]).apply();
             refresh();
@@ -78,60 +78,21 @@ public final class AutomationActivity extends Activity {
             refresh();
         }));
 
-        root.addView(section("REMOTE SHORTCUTS"));
-        root.addView(note("Remote shortcuts — not available on this firmware", NOTE_PX,
+        root.addView(Ui.section(this, "REMOTE SHORTCUTS", GAP_PX));
+        root.addView(Ui.note(this, "Remote shortcuts — not available on this firmware", NOTE_PX,
                 R.color.warning));
-        root.addView(note("The OEM consumes Menu and Guide before apps, so the overlay "
+        root.addView(Ui.note(this, "The OEM consumes Menu and Guide before apps, so the overlay "
                 + "shortcut cannot be remapped here.", NOTE_PX, R.color.text_secondary));
-        LinearLayout remote = chipRow(root);
-        Button remoteKey = addChip(remote, "Remote shortcut key · " + remoteKeyName(), null);
+        LinearLayout remote = Ui.chipRow(root, GAP_PX);
+        Button remoteKey = Ui.addChip(remote, "Remote shortcut key · " + remoteKeyName(), null,
+                GAP_PX);
         remoteKey.setEnabled(false);
-        addChip(remote, "Open accessibility settings", v -> openAccessibilitySettings());
+        Ui.addChip(remote, "Open accessibility settings", v -> openAccessibilitySettings(), GAP_PX);
 
         scroll.addView(root);
         setContentView(scroll);
         refresh();
         root.post(this::focusInitial);
-    }
-
-    private TextView section(String label) {
-        TextView kicker = Ui.kicker(this, label);
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        params.topMargin = Ui.px(this, GAP_PX);
-        params.bottomMargin = Ui.px(this, 8f);
-        kicker.setLayoutParams(params);
-        return kicker;
-    }
-
-    private TextView note(String value, float designPx, int colorRes) {
-        TextView view = Ui.text(this, value, designPx, colorRes);
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        params.bottomMargin = Ui.px(this, 8f);
-        view.setLayoutParams(params);
-        return view;
-    }
-
-    private LinearLayout chipRow(LinearLayout root) {
-        LinearLayout row = new LinearLayout(this);
-        row.setOrientation(LinearLayout.HORIZONTAL);
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        params.bottomMargin = Ui.px(this, GAP_PX);
-        row.setLayoutParams(params);
-        root.addView(row);
-        return row;
-    }
-
-    private Button addChip(LinearLayout row, String title, View.OnClickListener action) {
-        Button button = Ui.chip(this, title);
-        if (action != null) button.setOnClickListener(action);
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        params.setMarginEnd(Ui.px(this, GAP_PX));
-        row.addView(button, params);
-        return button;
     }
 
     private Ui.Row addRow(LinearLayout root, String label, View.OnClickListener action) {

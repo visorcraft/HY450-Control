@@ -98,7 +98,27 @@ The build reads `version` and `versionCode` from `module/module.prop`, creates
 a debug-signed `hy450-control.apk`, and places a copy in the Magisk module.
 Both are generated outputs and are intentionally not tracked. Set
 `ANDROID_KEYSTORE`, `ANDROID_KEYSTORE_PASS`, and `ANDROID_KEY_ALIAS` to sign
-with a different key.
+with a different key. Debug-signed describes only the signing identity: the
+manifest explicitly sets `android:debuggable="false"`, so local and release
+builds are non-debuggable.
+
+### Regression tests
+
+Run the plain-JVM host suite:
+
+```bash
+./tests/run-host.sh
+```
+
+Run the Android fake-data suite against an explicit device serial:
+
+```bash
+adb connect <projector-ip>:5555
+./tests/run-device.sh <projector-ip>:5555
+```
+
+The device suite uses temporary private paths and fake value access; it does
+not write live projection settings.
 
 ### Install
 
@@ -132,10 +152,10 @@ partition, remove another module, or reset the projector.
 - **Input controls** - switch the active source, freeze the current input, control idle blue-screen behavior, and inspect the firmware's boot default without exposing it to D-pad adjustment.
 - **Readable, bounded controls** - On/Off and vendor-enum labels, clamped adjustments that never wrap, and persistent readback/limit/error feedback in a fixed status footer. Picture, audio, and input families load independently; adjustments refresh only the affected row.
 - **Original-value restore** - restore a family's firmware-bound snapshot while continuing past unsupported controls; existing snapshots are never overwritten.
-- **Projection backup** - save and restore projection settings as JSON without resetting keystone during backup.
-- **Fullscreen calibration toolkit** - D-pad-friendly focus grid, sharpness, RGB, alignment, greyscale, and solid-colour patterns with system bars hidden. **Square the image** sets the keystone from the tilt sensor, using insets measured on the wall for this ceiling mount. Opening OEM focus and correction puts the previous keystone back when that screen exits, because the OEM screen clears it on the way out.
+- **Projection backup** - save and restore projection settings as JSON without resetting keystone during backup. Values absent when the backup was taken are explicitly cleared on restore, while empty strings remain empty.
+- **Fullscreen calibration toolkit** - D-pad-friendly focus grid, sharpness, RGB, alignment, greyscale, and solid-colour patterns with system bars hidden. **Square the image** sets the keystone from the tilt sensor, using insets measured on the wall for this ceiling mount. Opening OEM focus and correction saves the exact keystone and zoom before launch and restores them after exit. Pending recovery survives process death and remains pending after a failed strict readback so a later resume can retry; explicit cancellation clears it.
 - **Quick overlay** - backlight, volume, input selection, visible readback, BACK dismissal, and a visible 15-second countdown without opening the full control panel. Launching the OEM input source dismisses the overlay first.
-- **Named presets** - save and reapply picture, audio, and input settings while skipping read-only entries during application.
+- **Family presets** - save and reapply picture, audio, and input settings while skipping read-only controls and missing entries. Application continues after individual failures and reports applied/failed counts with capped per-control errors; success requires zero failures.
 - **Automation** - choose an app to launch after boot and set a sleep timer. Both are opt-in and can be switched off. Accessibility configuration uses Android's system settings instead of rewriting the enabled-service list.
 
 ## Safety model
@@ -232,8 +252,9 @@ The development-unit checks included:
 
 ## Release automation
 
-GitHub Actions builds and verifies the APK on every push to `master` and every
-pull request. A pushed `v*` tag additionally creates a signed GitHub Release
+GitHub Actions runs the host regression tests, then builds and verifies the
+non-debuggable APK on every push to `master` and every pull request. A pushed
+`v*` tag additionally creates a signed GitHub Release
 with the versioned APK and its SHA-256 checksum. The release job rejects a tag
 that does not match `module/module.prop`.
 

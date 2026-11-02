@@ -88,6 +88,49 @@ public final class Ui {
         return view;
     }
 
+    public static TextView section(Context context, String label, float gapPx) {
+        TextView kicker = kicker(context, label);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        params.topMargin = px(context, gapPx);
+        params.bottomMargin = px(context, 8f);
+        kicker.setLayoutParams(params);
+        return kicker;
+    }
+
+    public static TextView note(Context context, String value, float textPx, int colorRes) {
+        TextView view = text(context, value, textPx, colorRes);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        params.bottomMargin = px(context, 8f);
+        view.setLayoutParams(params);
+        return view;
+    }
+
+    public static LinearLayout chipRow(LinearLayout root, float gapPx) {
+        Context context = root.getContext();
+        LinearLayout row = new LinearLayout(context);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        params.bottomMargin = px(context, gapPx);
+        row.setLayoutParams(params);
+        root.addView(row);
+        return row;
+    }
+
+    public static Button addChip(LinearLayout row, String title, View.OnClickListener action,
+            float gapPx) {
+        Context context = row.getContext();
+        Button button = chip(context, title);
+        if (action != null) button.setOnClickListener(action);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        params.setMarginEnd(px(context, gapPx));
+        row.addView(button, params);
+        return button;
+    }
+
     public static Button tile(Context context, CharSequence title) {
         return tile(context, title, null);
     }

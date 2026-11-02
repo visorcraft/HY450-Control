@@ -187,21 +187,11 @@ public final class ControlPageActivity extends Activity {
                 Ui.px(this, 16f));
         rail.setLayoutParams(new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
-        saveButton = addChip(rail, "Save preset", v -> savePreset());
-        applyButton = addChip(rail, "Apply preset", v -> applyPreset());
-        restoreButton = addChip(rail, "Restore originals", v -> restoreOriginals());
+        saveButton = Ui.addChip(rail, "Save preset", v -> savePreset(), ROW_MARGIN_PX);
+        applyButton = Ui.addChip(rail, "Apply preset", v -> applyPreset(), ROW_MARGIN_PX);
+        restoreButton = Ui.addChip(rail, "Restore originals", v -> restoreOriginals(), ROW_MARGIN_PX);
         scroll.addView(rail);
         return scroll;
-    }
-
-    private Button addChip(LinearLayout rail, String title, View.OnClickListener action) {
-        Button button = Ui.chip(this, title);
-        button.setOnClickListener(action);
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        params.setMarginEnd(Ui.px(this, ROW_MARGIN_PX));
-        rail.addView(button, params);
-        return button;
     }
 
     private View errorCard() {

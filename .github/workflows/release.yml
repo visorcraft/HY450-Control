@@ -67,6 +67,8 @@ jobs:
           fi
           keytool -list -keystore release.keystore -storepass android \
             -alias androiddebugkey >/dev/null
+      - name: Run host regression tests
+        run: ./tests/run-host.sh
       - name: Build APK
         env:
           ANDROID_KEYSTORE: ${{ github.workspace }}/release.keystore
