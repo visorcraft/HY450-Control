@@ -211,7 +211,7 @@ public final class Ui {
 
         @Override
         protected boolean onStateChange(int[] stateSet) {
-            boolean enabled = true;
+            boolean enabled = false;
             boolean focused = false;
             boolean pressed = false;
             for (int state : stateSet) {
