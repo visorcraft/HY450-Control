@@ -33,7 +33,7 @@ Use platform `sans-serif-medium`, `sans-serif-black`, and `monospace`; no thin f
 
 At 1080p with the default font scale: dashboard title 76 px, tile title 60 px, section kicker 30 px, row label 46 px, row value 52 px monospace, TARGET value 76 px monospace, chip 38 px, status summary 46 px, status detail 40 px, hint 32 px. Spacing uses an 8 px design grid, 64 px page margins, 20 px card gaps, 16 px tile radius, and 10 px row radius.
 
-`Ui.focusBackground()` builds a `StateListDrawable`: normal card fill; focused fill plus a 6 px cyan leading rail; pressed fill plus rail; disabled without rail. Background swaps do not request layout. Only dashboard tiles may animate focus scale 1.00↔1.03 over 120 ms. No continuous decorative animation outside the overlay countdown, and no glow, blur, gradients, or row bounce.
+`Ui.focusBackground()` and `Ui.rowBackground()` use the final stateful `CardDrawable`, which paints the normal/focused/pressed/disabled card and 6 px cyan leading rail directly without per-draw allocation. Disabled cards never show a rail. Background swaps do not request layout. Only dashboard tiles may animate focus scale 1.00↔1.03 over 120 ms; the dashboard row and padded root allow the scaled rail to extend into the existing margin instead of clipping it. No continuous decorative animation outside the overlay countdown, and no glow, blur, gradients, or row bounce.
 
 ## Dashboard
 
@@ -91,7 +91,11 @@ Per-adjustment work is O(1) in views and vendor calls. No per-frame layout chang
 - Real-device screenshot inspection of every redesigned screen at 1920x1080.
 - Scripted D-pad audit: all tiles/chips/rows reachable, read-only skipped, error pages retain focus, BACK works, and no focus traps.
 - Safe hardware checks: backlight 100→101→100, gamma limit/restore, original-value restore, preset read-only skip, overlay BACK/15-second countdown/dismiss, overlay input-source focus, and calibration exit. Restore original values.
-- Confirm accessibility service list and Projectivy remain unchanged; startup and sleep remain disabled.
+- Confirm the accessibility service list and Projectivy remain unchanged, and preserve the live startup/sleep settings. On the development unit that means Projectivy startup remains selected and sleep remains off; older disabled-startup assumptions were incorrect.
 - Check rendering with `dumpsys gfxinfo` and repeated navigation; investigate visible jank or excessive allocation rather than assuming performance.
 - Deploy through the reversible Magisk module and verify on-device APK hash before/after reboot.
 - Only after device verification, bump the minor version, update docs/private records, commit/push master, tag, and verify the signed GitHub Release.
+
+## Final outcome
+
+Released as **v1.3.0/versionCode 8** at commit `fa2d2fb`. Real-device verification covered every redesigned screen, focused and disabled rail pixels, all eight dashboard destinations in at most four D-pad presses, chip-rail traversal, 130% font scaling, backlight/gamma restoration, overlay countdown and OEM handoff, calibration, and preservation of Projectivy startup/accessibility and the framework patch. The published APK checksum, release signature, package/version, CI jobs, and tag target were verified. Input preset save works, but applying it can fail `Out of range` on the firmware's current-input value; this limitation is documented rather than hidden.

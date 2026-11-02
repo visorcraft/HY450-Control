@@ -1,6 +1,8 @@
 # First Safety and Usability Milestone Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+**Status:** Complete; released as v1.2.0 at `5e44a6c` and superseded visually by the Signal Console release.
+
+> **For agentic workers:** This completed plan is retained for implementation history; every task checkbox is marked complete.
 
 **Goal:** Make HY450 Control safer and clearer with clamped writes, readable values and persistent feedback, original-value restoration, resilient family loading, a dismissible overlay, and fullscreen calibration.
 
@@ -33,7 +35,7 @@
 - Consumes: existing `ControlAdapter.read()`, `write()`, `min()`, and `max()` contracts.
 - Produces: `default boolean isWritable()`, `default String format(int value)`, and `default int clamp(int value)`; readable enum/boolean values; non-writable read-only controls.
 
-- [ ] **Step 1: Add the default adapter behavior**
+- [x] **Step 1: Add the default adapter behavior**
 
 Use Java 8 default methods so numeric adapters need no formatting changes:
 
@@ -47,7 +49,7 @@ default int clamp(int value) {
 }
 ```
 
-- [ ] **Step 2: Implement boolean and read-only overrides**
+- [x] **Step 2: Implement boolean and read-only overrides**
 
 Add to `VendorBooleanControl`:
 
@@ -67,7 +69,7 @@ Add to `ReadOnlyControl`:
 public boolean isWritable() { return false; }
 ```
 
-- [ ] **Step 3: Implement readable enum formatting**
+- [x] **Step 3: Implement readable enum formatting**
 
 Add a range-checked `format(int)` override to `VendorEnumControl`. Obtain the stable name with `((Enum<?>) values[value]).name()`, remove a leading `E_AW_`, replace underscores with spaces, lowercase the remainder, and capitalize each word. Keep numeric indices as the stored/written representation. Use this implementation:
 
@@ -89,7 +91,7 @@ public String format(int value) {
 }
 ```
 
-- [ ] **Step 4: Build and inspect**
+- [x] **Step 4: Build and inspect**
 
 Run: `rtk ./build.sh`
 Expected: Java compilation, D8, APK signing, and `apksigner verify` all succeed; final output is `built: hy450-control.apk`.
@@ -97,7 +99,7 @@ Expected: Java compilation, D8, APK signing, and `apksigner verify` all succeed;
 Run: `rtk git diff --check`
 Expected: no whitespace errors.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 rtk git add src/com/visorcraft/hy450control/ControlAdapter.java \
@@ -122,7 +124,7 @@ rtk git -c user.name="visorcraft" -c user.email="noreply@visorcraft.local" \
 - Consumes: `ControlAdapter.isWritable()`, `format(int)`, and `clamp(int)` from Task 1; existing `BackupStore.hasSnapshot()`, `snapshot()`, and `readSnapshot()`.
 - Produces: `static List<Control> loadControls(Context context, String family)` and `static void start(Context context, String title, String family)` in `ControlPageActivity`.
 
-- [ ] **Step 1: Remove static control transfer and rebuild by family**
+- [x] **Step 1: Remove static control transfer and rebuild by family**
 
 Delete `private static List<Control> pending`. Implement:
 
@@ -144,7 +146,7 @@ public static void start(Context context, String title, String family) {
 
 In `onCreate`, assign `family` first and rebuild with `controls.addAll(loadControls(this, family))` inside a local try/catch. Preserve the intent title and family extras. Retain any load exception message in a local `String loadError`, finish constructing the page with an empty control list, show `Controls unavailable: <message>` in the persistent status, and skip automatic backup in that case; `onCreate` cannot propagate the checked exception.
 
-- [ ] **Step 2: Load each dashboard family independently**
+- [x] **Step 2: Load each dashboard family independently**
 
 Replace the single try/catch around all three `page(...)` calls with three calls to a helper. The helper creates the button first, validates only its own family with `ControlPageActivity.loadControls(this, family)`, and disables only that button on failure:
 
@@ -166,7 +168,7 @@ private void controlPage(LinearLayout root, String title, String family) {
 
 Call it for `("Picture controls", "picture")`, `("Audio controls", "audio")`, and `("Input controls", "source")`. Remove the obsolete `page(..., List<Control>)` method and unused `java.util.List` import. Ensure initial focus uses an existing enabled view rather than assuming child index 3 is suitable.
 
-- [ ] **Step 3: Add persistent status, restore action, and readable rows**
+- [x] **Step 3: Add persistent status, restore action, and readable rows**
 
 Add fields:
 
@@ -185,11 +187,11 @@ rows.get(i).setText(control.title + "\n" + control.adapter.format(control.adapte
 
 After layout, focus the first writable row if one exists; otherwise focus `saveButton`. Do not request row focus again on every refresh.
 
-- [ ] **Step 4: Back up writable controls individually**
+- [x] **Step 4: Back up writable controls individually**
 
 Replace the all-or-nothing backup loop with per-control reads that skip `!control.adapter.isWritable()` and collect read failures. If at least one value was read and no snapshot exists, write one snapshot containing those values. Never replace an existing snapshot. Show a persistent warning listing backup failures; if no values could be saved, explicitly state that no snapshot was created.
 
-- [ ] **Step 5: Clamp adjustments and retain feedback**
+- [x] **Step 5: Clamp adjustments and retain feedback**
 
 Use this operation shape for left/right/centre adjustment:
 
@@ -219,11 +221,11 @@ private void adjust(int direction) {
 
 Remove wrapping assignments and adjustment toasts. Keep refresh in `finally`-equivalent control flow so actual values are shown after failures as well.
 
-- [ ] **Step 6: Let native D-pad navigation skip read-only rows**
+- [x] **Step 6: Let native D-pad navigation skip read-only rows**
 
 Delete manual UP/DOWN index navigation. Handle only LEFT, RIGHT, CENTRE, and ENTER when the currently focused row is writable; delegate other keys with `return super.onKeyDown(code, event)`. Native focus navigation then moves among buttons and writable rows without focusing read-only rows.
 
-- [ ] **Step 7: Implement fault-tolerant original-value restore**
+- [x] **Step 7: Implement fault-tolerant original-value restore**
 
 Read and validate `BackupStore.readSnapshot(family)` before any writes. Iterate the current controls; skip read-only controls, report writable controls absent from the snapshot as skipped, and catch each write failure individually. Continue after range, vendor, and readback errors. Use this structure:
 
@@ -262,14 +264,14 @@ private void restoreOriginals() {
 
 Do not clamp snapshot values and do not modify `BackupStore` or its schema.
 
-- [ ] **Step 8: Update preset feedback and build**
+- [x] **Step 8: Update preset feedback and build**
 
 Route preset save/apply/failure messages through the persistent status instead of short toasts. Keep preset storage unchanged, but skip read-only controls during preset application so they cannot cause a false failure or abort later writes; this is an explicit user-approved refinement of the original unchanged-preset constraint. Disable all three actions when the family cannot load or has no controls, refuse to save an empty value map, and cap detailed failure lists with a remaining-count summary so the fixed footer cannot consume the viewport. Remove the obsolete `Toast` import and `toast(...)` method only after all uses are gone.
 
 Run: `rtk ./build.sh && rtk git diff --check`
 Expected: build and APK verification succeed; no whitespace errors.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 rtk git add src/com/visorcraft/hy450control/MainActivity.java \
@@ -289,11 +291,11 @@ rtk git -c user.name="visorcraft" -c user.email="noreply@visorcraft.local" \
 - Consumes: `VendorIntControl.clamp(int)` and `format(int)` from Task 1.
 - Produces: visible overlay feedback, BACK dismissal, 15-second inactivity dismissal, and safe handler/window cleanup.
 
-- [ ] **Step 1: Add status and timeout state**
+- [x] **Step 1: Add status and timeout state**
 
 Add a main-thread `Handler`, a 15,000 ms timeout constant, a `TextView status`, and a `Runnable timeout` that calls `stopSelf()`. `armTimeout()` removes callbacks and posts the runnable for 15 seconds. Return `START_NOT_STICKY` from `onStartCommand` and arm the timeout on every start.
 
-- [ ] **Step 2: Handle BACK and interaction at the panel boundary**
+- [x] **Step 2: Handle BACK and interaction at the panel boundary**
 
 Construct the panel as an anonymous `LinearLayout` overriding `dispatchKeyEvent(KeyEvent)`:
 
@@ -311,7 +313,7 @@ public boolean dispatchKeyEvent(KeyEvent event) {
 
 Add a light-gray, non-focusable status view before the buttons. Every button click rearms the timeout before running its action.
 
-- [ ] **Step 3: Clamp and report backlight operations**
+- [x] **Step 3: Clamp and report backlight operations**
 
 Replace `control.write(control.read() + direction)` with current/clamped logic equivalent to:
 
@@ -329,13 +331,13 @@ if (next == current) {
 
 Catch failures and put `Backlight failed: <message>` in the status; do not silently ignore them.
 
-- [ ] **Step 4: Report volume and clean up**
+- [x] **Step 4: Report volume and clean up**
 
 After `adjustStreamVolume`, show `Volume: <current>/<max>` using `getStreamVolume` and `getStreamMaxVolume`. Catch volume failures into the same status view.
 
 In `onDestroy`, remove timeout callbacks, detach the panel only when non-null and attached to a window, null the fields, and call `super.onDestroy()`.
 
-- [ ] **Step 5: Build and commit**
+- [x] **Step 5: Build and commit**
 
 Run: `rtk ./build.sh && rtk git diff --check`
 Expected: build and APK verification succeed; no whitespace errors.
@@ -357,7 +359,7 @@ rtk git -c user.name="visorcraft" -c user.email="noreply@visorcraft.local" \
 - Consumes: Android 34 `WindowInsets` and `WindowInsetsController` APIs.
 - Produces: immersive calibration with existing pattern and BACK behavior unchanged.
 
-- [ ] **Step 1: Hide system bars**
+- [x] **Step 1: Hide system bars**
 
 Add imports for `android.view.WindowInsets` and `android.view.WindowInsetsController`. Add:
 
@@ -374,7 +376,7 @@ private void hideSystemBars() {
 
 Call `hideSystemBars()` after `setContentView(view)` and again from `onWindowFocusChanged(boolean)` whenever focus is gained. Keep existing D-pad and BACK dispatch unchanged.
 
-- [ ] **Step 2: Build and commit**
+- [x] **Step 2: Build and commit**
 
 Run: `rtk ./build.sh && rtk git diff --check`
 Expected: build and APK verification succeed; no whitespace errors.
@@ -398,28 +400,28 @@ rtk git -c user.name="visorcraft" -c user.email="noreply@visorcraft.local" \
 - Consumes: the complete implementation from Tasks 1–4 and the existing `install.sh` reversible Magisk installation procedure.
 - Produces: accurate public usage/verification records and private device-state notes; no release or version change unless separately requested.
 
-- [ ] **Step 1: Run a clean source build**
+- [x] **Step 1: Run a clean source build**
 
 Run: `rtk ./build.sh && rtk git diff --check && rtk git status --short`
 Expected: build/signing succeeds, no whitespace errors, and generated APK/build outputs do not appear as untracked files.
 
-- [ ] **Step 2: Verify dashboard and control-page behavior on the projector**
+- [x] **Step 2: Verify dashboard and control-page behavior on the projector**
 
 Connect explicitly to the known device and install using the existing module script; reboot only as required by that script. Confirm all three available family buttons remain usable, readable boolean/enum labels appear, read-only boot default cannot be focused, limit adjustments do not wrap, and persistent status matches actual readback. Exercise a supported control by changing one step, reading it back, then restoring its exact original value.
 
-- [ ] **Step 3: Verify original-value restore**
+- [x] **Step 3: Verify original-value restore**
 
 Record the current values first. Change one supported value, invoke **Restore original values**, and confirm the pre-change snapshot value returns. Confirm a missing/unsupported entry is reported without preventing other restores. Leave all hardware settings at their original values.
 
-- [ ] **Step 4: Verify overlay and calibration**
+- [x] **Step 4: Verify overlay and calibration**
 
 Open the overlay; confirm visible feedback, clamped backlight behavior without changing the final original value, BACK dismissal, and automatic dismissal after approximately 15 seconds. Open calibration and confirm status/navigation bars are hidden, left/right changes patterns, and BACK exits.
 
-- [ ] **Step 5: Check unrelated device state and update documentation**
+- [x] **Step 5: Check unrelated device state and update documentation**
 
 Confirm Projectivy accessibility and existing Magisk modules remain intact. Update README feature/safety/verified-on-hardware bullets only with checks actually performed. Record the installed build hash and verification results in the private archive before any public claim. Do not push either repository and do not create a release under this task.
 
-- [ ] **Step 6: Commit accurate documentation**
+- [x] **Step 6: Commit accurate documentation**
 
 ```bash
 rtk git add README.md

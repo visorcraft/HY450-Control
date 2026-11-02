@@ -220,9 +220,11 @@ The development-unit checks included:
 - Partial audio backup/restore continuing past unsupported controls, with restored/failed counts and capped error details.
 - EQ-band and input-freeze writes followed by restoration.
 - Projection JSON backup/restore without changing keystone.
-- Quick-overlay D-pad write/readback (`100 → 101 → 100`), BACK dismissal with focus restored, and 15-second automatic dismissal.
+- Quick-overlay D-pad write/readback (`100 → 101 → 100`), BACK dismissal with focus restored, countdown rearm, 15-second automatic dismissal, and OEM input-source launch with the overlay already detached.
 - All six calibration patterns rendered fullscreen, pattern navigation, and BACK exit.
-- Startup-app launch after a real reboot, then automation disabled.
+- Signal Console screens inspected at 1920×1080, including focused/disabled rails and wrapped long values; every dashboard destination was reachable in at most four D-pad presses.
+- Dashboard and Picture controls remained usable at 130% font scale, which was restored to 100% afterward.
+- Startup-app launch after a real reboot, then automation disabled after that historical test; the current development unit's Projectivy startup choice is preserved.
 - Sleep receiver putting the projector to sleep and POWER waking it.
 - Preset save/apply restoring the original backlight value.
 - Module removal and reinstallation, with Projectivy accessibility and the
