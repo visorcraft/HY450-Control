@@ -89,6 +89,7 @@ jobs:
               os.environ["CODE"], os.environ["VERSION"])
           assert "com.visorcraft.hy450control" in first, first
           assert expected in first, first
+          assert "application-debuggable" not in output, output
           print(first)
           PY
       - name: Stage artifacts + checksum

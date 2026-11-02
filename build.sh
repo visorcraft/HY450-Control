@@ -35,6 +35,10 @@ cp "$OUT/dex/classes.dex" "$OUT/classes.dex"
   --ks-pass "pass:$KEYSTORE_PASS" --key-pass "pass:$KEYSTORE_PASS" \
   --out hy450-control.apk "$OUT/app-unsigned.apk"
 "$BT/apksigner" verify --print-certs hy450-control.apk
+if "$BT/aapt2" dump badging hy450-control.apk | grep -q 'application-debuggable'; then
+  echo "release APK must not be debuggable" >&2
+  exit 1
+fi
 mkdir -p module/system/priv-app/HY450Control module/system/bin
 cp hy450-control.apk module/system/priv-app/HY450Control/HY450Control.apk
 NDK="${ANDROID_NDK_ROOT:-$HOME/Android/Sdk/ndk/27.0.12077973}"

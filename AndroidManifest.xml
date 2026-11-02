@@ -11,7 +11,7 @@
     <application
         android:label="HY450 Control"
         android:allowBackup="false"
-        android:debuggable="true"
+        android:debuggable="false"
         android:usesNonSdkApi="true"
         android:theme="@style/AppTheme">
         <uses-library android:name="com.softwinner.tv" android:required="false" />
