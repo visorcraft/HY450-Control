@@ -49,7 +49,8 @@ public final class DeviceTests {
 
     public static void main(String[] args) throws Exception {
         Map<String, String> globals = new HashMap<>();
-        FakeAccess access = new FakeAccess(globals, new HashMap<>());
+        Map<String, String> properties = new HashMap<>();
+        FakeAccess access = new FakeAccess(globals, properties);
         JSONObject values = ProjectionBackup.captureValues(access);
         check(values.has("global:GsInitXYZ"), "absent key must remain present");
         check(values.isNull("global:GsInitXYZ"), "absence must be JSON null");
@@ -61,6 +62,26 @@ public final class DeviceTests {
         globals.put("JbCamX", "changed");
         ProjectionBackup.restoreValues(values, access);
         check("".equals(globals.get("JbCamX")), "empty string must survive round trip");
+
+        String property = "persist.display.keystone_ltx";
+        properties.put(property, "12.5");
+        values = ProjectionBackup.captureValues(access);
+        check("12.5".equals(values.getString("property:" + property)),
+                "property string must be captured");
+        properties.put(property, "changed");
+        ProjectionBackup.restoreValues(values, access);
+        check("12.5".equals(properties.get(property)), "property string must survive round trip");
+
+        JSONObject nullProperty = new JSONObject();
+        nullProperty.put("property:" + property, JSONObject.NULL);
+        boolean rejected = false;
+        try {
+            ProjectionBackup.restoreValues(nullProperty, access);
+        } catch (IllegalStateException expected) {
+            rejected = true;
+        }
+        check(rejected, "JSON null property must be rejected");
+        check("12.5".equals(properties.get(property)), "rejected property must not be written");
 
         testReadBackup();
         System.out.println("Device tests passed");

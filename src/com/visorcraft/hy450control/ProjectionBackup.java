@@ -38,7 +38,12 @@ final class ProjectionBackup {
 
             @Override
             public void putGlobal(String key, String value) {
-                Settings.Global.putString(context.getContentResolver(), key, value);
+                if (value == null) {
+                    context.getContentResolver().delete(android.net.Uri.withAppendedPath(
+                            Settings.Global.CONTENT_URI, key), null, null);
+                } else {
+                    Settings.Global.putString(context.getContentResolver(), key, value);
+                }
             }
 
             @Override
@@ -74,7 +79,12 @@ final class ProjectionBackup {
 
             @Override
             public void putGlobal(String key, String value) {
-                Settings.Global.putString(context.getContentResolver(), key, value);
+                if (value == null) {
+                    context.getContentResolver().delete(android.net.Uri.withAppendedPath(
+                            Settings.Global.CONTENT_URI, key), null, null);
+                } else {
+                    Settings.Global.putString(context.getContentResolver(), key, value);
+                }
             }
 
             @Override
