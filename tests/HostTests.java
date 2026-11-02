@@ -1,6 +1,8 @@
 package com.visorcraft.hy450control;
 
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public final class HostTests {
@@ -12,6 +14,86 @@ public final class HostTests {
     };
 
     public static void main(String[] args) throws Exception {
+        class FakeControl implements ControlAdapter {
+            private final boolean writable;
+            private final Exception failure;
+            private int lastWritten;
+            private int writeCalls;
+
+            FakeControl(boolean writable, Exception failure) {
+                this.writable = writable;
+                this.failure = failure;
+            }
+
+            @Override
+            public boolean isAvailable() { return true; }
+
+            @Override
+            public int read() { return lastWritten; }
+
+            @Override
+            public void write(int value) throws Exception {
+                writeCalls++;
+                if (failure != null) throw failure;
+                lastWritten = value;
+            }
+
+            @Override
+            public int min() { return 0; }
+
+            @Override
+            public int max() { return 100; }
+
+            @Override
+            public boolean isWritable() { return writable; }
+        }
+
+        FakeControl firstAdapter = new FakeControl(true, null);
+        FakeControl middleAdapter = new FakeControl(true, new Exception("Out of range"));
+        FakeControl lastAdapter = new FakeControl(true, null);
+        FakeControl readOnlyAdapter = new FakeControl(false, null);
+        Control first = new Control("first", "First", firstAdapter);
+        Control middle = new Control("middle", "Middle", middleAdapter);
+        Control last = new Control("last", "Last", lastAdapter);
+        Control readOnly = new Control("read-only", "Read only", readOnlyAdapter);
+        List<Control> controls = Arrays.asList(first, middle, last, readOnly);
+        Map<String, Integer> stored = new HashMap<>();
+        stored.put("first", 10);
+        stored.put("middle", 20);
+        stored.put("last", 30);
+        stored.put("read-only", 40);
+        ControlBatch.Values values = new ControlBatch.Values() {
+            @Override
+            public boolean has(String id) { return stored.containsKey(id); }
+
+            @Override
+            public int getInt(String id) throws Exception {
+                Integer value = stored.get(id);
+                if (value == null) throw new Exception("Missing value");
+                return value;
+            }
+        };
+        ControlBatch.Result result = ControlBatch.apply(controls, values);
+        check(result.applied == 2, "later controls must still apply");
+        check(result.failures.size() == 1, "one failure must be reported");
+        check(result.failures.get(0).startsWith("Middle: "), "failure must identify control");
+        check(firstAdapter.lastWritten == 10 && lastAdapter.lastWritten == 30,
+                "surrounding writes must land");
+        check(readOnlyAdapter.writeCalls == 0, "read-only control must be skipped");
+
+        stored.remove("last");
+        ControlBatch.Result missingStored = ControlBatch.apply(Arrays.asList(last), values);
+        check(missingStored.applied == 0 && missingStored.failures.isEmpty(),
+                "missing stored ID must be skipped without failure");
+
+        boolean immutable = false;
+        try {
+            result.failures.add("unexpected");
+        } catch (UnsupportedOperationException expected) {
+            immutable = true;
+        }
+        check(immutable, "failure details must be immutable");
+
         Map<String, String> valid = validValues();
         Keystone.PropertyReader validReader = valid::get;
         Keystone.Snapshot snapshot = Keystone.read(validReader);

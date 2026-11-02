@@ -415,13 +415,18 @@ public final class ControlPageActivity extends Activity {
     private void applyPreset() {
         try {
             JSONObject stored = presets.read(family).getJSONObject("values");
-            for (Control control : controls) {
-                if (!control.adapter.isWritable()) continue;
-                if (stored.has(control.id)) control.adapter.write(stored.getInt(control.id));
+            ControlBatch.Result result = ControlBatch.apply(controls, new ControlBatch.Values() {
+                public boolean has(String id) { return stored.has(id); }
+                public int getInt(String id) throws Exception { return stored.getInt(id); }
+            });
+            StringBuilder message = new StringBuilder("Applied ").append(result.applied).append(" values");
+            if (!result.failures.isEmpty()) {
+                message.append(" • ").append(result.failures.size()).append(" not applied");
+                message.append("\n").append(detail(result.failures));
             }
-            setStatus("Preset applied", StatusKind.SUCCESS);
+            setStatus(message.toString(), result.failures.isEmpty() ? StatusKind.SUCCESS : StatusKind.WARNING);
         } catch (Exception error) {
-            setStatus("Apply failed: " + Errors.describe(error), StatusKind.ERROR);
+            setStatus("Apply unavailable: " + Errors.describe(error), StatusKind.ERROR);
         }
         refresh();
     }
