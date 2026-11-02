@@ -43,6 +43,8 @@ public class MainActivity extends Activity {
         scroll.setFocusable(false);
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
+        root.setClipChildren(false);
+        root.setClipToPadding(false);
         int margin = Ui.px(this, PAGE_MARGIN_PX);
         root.setPadding(margin, margin, margin, margin);
 
@@ -206,6 +208,7 @@ public class MainActivity extends Activity {
     private LinearLayout row() {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setClipChildren(false);
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         params.bottomMargin = Ui.px(this, GAP_PX);
