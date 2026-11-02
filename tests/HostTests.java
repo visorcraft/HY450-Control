@@ -151,7 +151,52 @@ public final class HostTests {
         malformedZoom.put("persist.display.keystone_zoom_v", "bad");
         expectThrows(() -> Keystone.read(malformedZoom::get), "malformed zoom");
 
+        java.io.File directory = new java.io.File(System.getProperty("java.io.tmpdir"),
+                "hy450-json-file-store-" + System.nanoTime());
+        check(directory.mkdirs(), "file-helper test directory must be created");
+        try {
+            expectThrows(() -> JsonFileStore.read(new java.io.File(directory, "missing.json")),
+                    "missing file must throw");
+
+            java.io.File target = new java.io.File(directory, "values.json");
+            java.io.File temporary = new java.io.File(directory, "values.tmp");
+            String unicode = "Keystone: Grüße, 投影, 🎬\n";
+            JsonFileStore.write(target, temporary, unicode);
+            check(unicode.equals(JsonFileStore.read(target)), "UTF-8 content must round trip");
+
+            String replacement = "replacement";
+            JsonFileStore.write(target, temporary, replacement);
+            check(replacement.equals(JsonFileStore.read(target)),
+                    "write must replace existing content");
+
+            java.io.File regularFile = new java.io.File(directory, "regular-file");
+            writeFile(regularFile, "not a directory");
+            expectThrows(() -> JsonFileStore.write(
+                            new java.io.File(regularFile, "target.json"),
+                            new java.io.File(regularFile, "temporary.json"), "value"),
+                    "regular-file target parent must throw");
+        } finally {
+            deleteRecursively(directory);
+        }
+
         System.out.println("Host tests passed");
+    }
+
+    private static void writeFile(java.io.File target, String value) throws Exception {
+        java.io.FileOutputStream output = new java.io.FileOutputStream(target);
+        try {
+            output.write(value.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        } finally {
+            output.close();
+        }
+    }
+
+    private static void deleteRecursively(java.io.File file) {
+        java.io.File[] children = file.listFiles();
+        if (children != null) {
+            for (java.io.File child : children) deleteRecursively(child);
+        }
+        file.delete();
     }
 
     private static Map<String, String> validValues() {

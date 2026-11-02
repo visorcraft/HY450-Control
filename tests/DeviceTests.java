@@ -84,7 +84,43 @@ public final class DeviceTests {
         check("12.5".equals(properties.get(property)), "rejected property must not be written");
 
         testReadBackup();
+        testBackupStoreDoesNotOverwrite();
         System.out.println("Device tests passed");
+    }
+
+    private static void testBackupStoreDoesNotOverwrite() throws Exception {
+        File directory = new File("/data/local/tmp",
+                "hy450-backup-store-" + System.nanoTime());
+        check(directory.mkdirs(), "backup-store test directory must be created");
+        try {
+            BackupStore store = new BackupStore(directory);
+            Map<String, Integer> values = new HashMap<>();
+            values.put("keystone", 12);
+            store.snapshot("keystone", values);
+            File snapshot = new File(directory, "keystone.json");
+            String original = JsonFileStore.read(snapshot);
+
+            values.put("keystone", 99);
+            boolean rejected = false;
+            try {
+                store.snapshot("keystone", values);
+            } catch (IllegalStateException expected) {
+                rejected = "Original snapshot already exists".equals(expected.getMessage());
+            }
+            check(rejected, "second snapshot for a family must be rejected");
+            check(original.equals(JsonFileStore.read(snapshot)),
+                    "rejected snapshot must leave original JSON unchanged");
+        } finally {
+            deleteRecursively(directory);
+        }
+    }
+
+    private static void deleteRecursively(File file) {
+        File[] children = file.listFiles();
+        if (children != null) {
+            for (File child : children) deleteRecursively(child);
+        }
+        file.delete();
     }
 
     private static void testReadBackup() throws Exception {

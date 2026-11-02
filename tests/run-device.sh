@@ -10,6 +10,8 @@ REMOTE="/data/local/tmp/hy450-control-device-tests"
 rm -rf "$OUT"
 mkdir -p "$OUT/classes" "$OUT/dex"
 javac -source 8 -target 8 -cp "$PLATFORM" -d "$OUT/classes" \
+  src/com/visorcraft/hy450control/BackupStore.java \
+  src/com/visorcraft/hy450control/JsonFileStore.java \
   src/com/visorcraft/hy450control/ProjectionBackup.java tests/DeviceTests.java
 "$BT/d8" --min-api 34 --output "$OUT/dex" "$OUT/classes"/com/visorcraft/hy450control/*.class
 cleanup() {
