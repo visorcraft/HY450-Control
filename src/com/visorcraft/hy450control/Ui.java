@@ -2,11 +2,14 @@ package com.visorcraft.hy450control;
 
 import android.content.Context;
 import android.content.res.ColorStateList;
+import android.graphics.Canvas;
+import android.graphics.ColorFilter;
+import android.graphics.Paint;
+import android.graphics.PixelFormat;
+import android.graphics.RectF;
 import android.graphics.Typeface;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
-import android.graphics.drawable.LayerDrawable;
-import android.graphics.drawable.StateListDrawable;
 import android.text.Spannable;
 import android.text.SpannableStringBuilder;
 import android.text.TextUtils;
@@ -127,11 +130,11 @@ public final class Ui {
     }
 
     public static Drawable focusBackground(Context context) {
-        return cardStates(context, TILE_RADIUS_PX);
+        return new CardDrawable(context, TILE_RADIUS_PX, true);
     }
 
     static Drawable rowBackground(Context context) {
-        return cardStates(context, ROW_RADIUS_PX);
+        return new CardDrawable(context, ROW_RADIUS_PX, true);
     }
 
     static Drawable readonlyBackground(Context context) {
@@ -140,19 +143,6 @@ public final class Ui {
         base.setColor(context.getColor(R.color.readonly));
         base.setCornerRadius(px(context, ROW_RADIUS_PX));
         return base;
-    }
-
-    private static Drawable cardStates(Context context, float radiusPx) {
-        StateListDrawable states = new StateListDrawable();
-        states.addState(new int[] { -android.R.attr.state_enabled },
-                card(context, context.getColor(R.color.disabled), radiusPx, false));
-        states.addState(new int[] { android.R.attr.state_pressed },
-                card(context, context.getColor(R.color.card_pressed), radiusPx, true));
-        states.addState(new int[] { android.R.attr.state_focused },
-                card(context, context.getColor(R.color.card_focused), radiusPx, true));
-        states.addState(new int[] { },
-                card(context, context.getColor(R.color.card), radiusPx, false));
-        return states;
     }
 
     private static ColorStateList enabledText(Context context) {
@@ -167,22 +157,105 @@ public final class Ui {
                 });
     }
 
-    private static Drawable card(Context context, int color, float radiusPx, boolean rail) {
-        GradientDrawable base = new GradientDrawable();
-        base.setShape(GradientDrawable.RECTANGLE);
-        base.setColor(color);
-        base.setCornerRadius(px(context, radiusPx));
-        if (!rail) return base;
-        float radius = px(context, radiusPx);
-        GradientDrawable accent = new GradientDrawable();
-        accent.setShape(GradientDrawable.RECTANGLE);
-        accent.setColor(context.getColor(R.color.accent));
-        accent.setCornerRadii(new float[] { radius, radius, 0f, 0f, 0f, 0f, radius, radius });
-        accent.setSize(px(context, RAIL_PX), -1);
-        LayerDrawable layered = new LayerDrawable(new Drawable[] { base, accent });
-        layered.setLayerSize(1, px(context, RAIL_PX), -1);
-        layered.setLayerGravity(1, Gravity.START | Gravity.FILL_VERTICAL);
-        return layered;
+    private static final class CardDrawable extends Drawable {
+        private final Paint basePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Paint railPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final RectF baseRect = new RectF();
+        private final RectF railRect = new RectF();
+        private final ColorStateList baseColors;
+        private final float radius;
+        private final float railWidth;
+        private final float railRadius;
+        private final boolean railEnabled;
+        private int alpha = 255;
+        private int baseColor;
+        private boolean showRail;
+
+        CardDrawable(Context context, float radiusPx, boolean railEnabled) {
+            baseColors = new ColorStateList(
+                    new int[][] {
+                        new int[] { -android.R.attr.state_enabled },
+                        new int[] { android.R.attr.state_pressed },
+                        new int[] { android.R.attr.state_focused },
+                        new int[] { }
+                    },
+                    new int[] {
+                        context.getColor(R.color.disabled),
+                        context.getColor(R.color.card_pressed),
+                        context.getColor(R.color.card_focused),
+                        context.getColor(R.color.card)
+                    });
+            baseColor = context.getColor(R.color.card);
+            basePaint.setColor(baseColor);
+            railPaint.setColor(context.getColor(R.color.accent));
+            radius = px(context, radiusPx);
+            railWidth = px(context, RAIL_PX);
+            railRadius = Math.min(radius, railWidth / 2f);
+            this.railEnabled = railEnabled;
+        }
+
+        @Override
+        public void draw(Canvas canvas) {
+            baseRect.set(getBounds());
+            canvas.drawRoundRect(baseRect, radius, radius, basePaint);
+            if (!showRail) return;
+            railRect.set(baseRect);
+            railRect.right = Math.min(baseRect.left + railWidth, baseRect.right);
+            canvas.drawRoundRect(railRect, railRadius, railRadius, railPaint);
+        }
+
+        @Override
+        public boolean isStateful() {
+            return true;
+        }
+
+        @Override
+        protected boolean onStateChange(int[] stateSet) {
+            boolean enabled = true;
+            boolean focused = false;
+            boolean pressed = false;
+            for (int state : stateSet) {
+                if (state == -android.R.attr.state_enabled) {
+                    enabled = false;
+                } else if (state == android.R.attr.state_enabled) {
+                    enabled = true;
+                } else if (state == android.R.attr.state_focused) {
+                    focused = true;
+                } else if (state == android.R.attr.state_pressed) {
+                    pressed = true;
+                }
+            }
+            boolean rail = railEnabled && enabled && (focused || pressed);
+            int color = baseColors.getColorForState(stateSet, baseColors.getDefaultColor());
+            if (color == baseColor && rail == showRail) return false;
+            baseColor = color;
+            basePaint.setColor(color);
+            basePaint.setAlpha(alpha);
+            showRail = rail;
+            invalidateSelf();
+            return true;
+        }
+
+        @Override
+        public void setAlpha(int alpha) {
+            if (this.alpha == alpha) return;
+            this.alpha = alpha;
+            basePaint.setAlpha(alpha);
+            railPaint.setAlpha(alpha);
+            invalidateSelf();
+        }
+
+        @Override
+        public void setColorFilter(ColorFilter colorFilter) {
+            basePaint.setColorFilter(colorFilter);
+            railPaint.setColorFilter(colorFilter);
+            invalidateSelf();
+        }
+
+        @Override
+        public int getOpacity() {
+            return PixelFormat.TRANSLUCENT;
+        }
     }
 
     private static void flatten(View view) {
