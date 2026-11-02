@@ -178,6 +178,15 @@ public final class HostTests {
             deleteRecursively(directory);
         }
 
+        String projectionActivity = new String(java.nio.file.Files.readAllBytes(
+                java.nio.file.Paths.get("src/com/visorcraft/hy450control/ProjectionActivity.java")),
+                java.nio.charset.StandardCharsets.UTF_8);
+        check(projectionActivity.contains("Ui.addChip(oem, \"OEM manual keystone\", v -> run(() -> {\n"
+                        + "            OemFocus.cancelRestore(this);\n"
+                        + "            component(\"com.hysd.vafocus\", \"com.hysd.vafocus.TchjzActivity\");\n"
+                        + "        }), GAP_PX);"),
+                "manual-keystone cancellation and launch must use the guarded action path");
+
         System.out.println("Host tests passed");
     }
 

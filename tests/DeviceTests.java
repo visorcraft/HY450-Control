@@ -63,6 +63,15 @@ public final class DeviceTests {
         ProjectionBackup.restoreValues(values, access);
         check("".equals(globals.get("JbCamX")), "empty string must survive round trip");
 
+        globals.put("GsInitXYZ", "12.5,-7.25,3");
+        values = ProjectionBackup.captureValues(access);
+        check("12.5,-7.25,3".equals(values.getString("global:GsInitXYZ")),
+                "non-empty global string must be captured");
+        globals.put("GsInitXYZ", "changed");
+        ProjectionBackup.restoreValues(values, access);
+        check("12.5,-7.25,3".equals(globals.get("GsInitXYZ")),
+                "non-empty global string must survive round trip");
+
         String property = "persist.display.keystone_ltx";
         properties.put(property, "12.5");
         values = ProjectionBackup.captureValues(access);
@@ -126,6 +135,7 @@ public final class DeviceTests {
     private static void testReadBackup() throws Exception {
         File directory = new File("/data/local/tmp");
         File valid = File.createTempFile("projection-backup-valid-", ".json", directory);
+        File legacy = File.createTempFile("projection-backup-legacy-", ".json", directory);
         File malformed = File.createTempFile("projection-backup-malformed-", ".json", directory);
         File mismatch = File.createTempFile("projection-backup-mismatch-", ".json", directory);
         try {
@@ -139,6 +149,23 @@ public final class DeviceTests {
             check(ProjectionBackup.readBackup(valid).isNull("global:GsInitXYZ"),
                     "schema-1 backup values must be returned");
 
+            JSONObject legacyValues = new JSONObject();
+            legacyValues.put("global:JbCamX", "legacy-camera-x");
+            legacyValues.put("property:persist.display.keystone_ltx", "17.5");
+            root.put("values", legacyValues);
+            write(legacy, root.toString());
+            JSONObject restoredValues = ProjectionBackup.readBackup(legacy);
+            Map<String, String> legacyGlobals = new HashMap<>();
+            Map<String, String> legacyProperties = new HashMap<>();
+            legacyGlobals.put("JbCamX", "changed");
+            legacyProperties.put("persist.display.keystone_ltx", "changed");
+            ProjectionBackup.restoreValues(restoredValues,
+                    new FakeAccess(legacyGlobals, legacyProperties));
+            check("legacy-camera-x".equals(legacyGlobals.get("JbCamX")),
+                    "legacy schema-1 global string must restore");
+            check("17.5".equals(legacyProperties.get("persist.display.keystone_ltx")),
+                    "legacy schema-1 property string must restore");
+
             write(malformed, "{not-json");
             expectReadBackupFailure(malformed, "malformed JSON must throw");
 
@@ -147,6 +174,7 @@ public final class DeviceTests {
             expectReadBackupFailure(mismatch, "firmware mismatch must throw");
         } finally {
             valid.delete();
+            legacy.delete();
             malformed.delete();
             mismatch.delete();
         }

@@ -56,10 +56,10 @@ public final class ProjectionActivity extends Activity {
                 R.color.text_secondary));
         LinearLayout oem = Ui.chipRow(root, GAP_PX);
         Ui.addChip(oem, "OEM focus and correction", v -> OemFocus.launch(this), GAP_PX);
-        Ui.addChip(oem, "OEM manual keystone", v -> {
+        Ui.addChip(oem, "OEM manual keystone", v -> run(() -> {
             OemFocus.cancelRestore(this);
             component("com.hysd.vafocus", "com.hysd.vafocus.TchjzActivity");
-        }, GAP_PX);
+        }), GAP_PX);
         LinearLayout reset = Ui.chipRow(root, GAP_PX);
         Ui.addChip(reset, "Full screen (reset keystone)", v -> run(() -> {
             OemFocus.cancelRestore(this);
