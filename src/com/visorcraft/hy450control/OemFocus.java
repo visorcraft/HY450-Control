@@ -28,27 +28,27 @@ final class OemFocus {
         try {
             cancelRestore(activity);
             Keystone.Snapshot saved = Keystone.read();
-            SharedPreferences.Editor editor = preferences(activity).edit();
-            editor.putBoolean(PENDING, true);
-            for (int i = 0; i < saved.inset.length; i++) {
-                editor.putInt(insetKey(i), saved.inset[i]);
+            if (!saveSnapshot(preferences(activity), saved)) {
+                throw new IllegalStateException("Keystone recovery save failed");
             }
-            editor.putFloat(ZOOM_H, saved.zoomH);
-            editor.putFloat(ZOOM_V, saved.zoomV);
-            if (!editor.commit()) throw new IllegalStateException("Keystone recovery save failed");
             activity.startActivity(new Intent().setComponent(
                     new ComponentName("com.hysd.vafocus", "com.hysd.vafocus.VajzActivity")));
         } catch (Exception error) {
-            cancelRestore(activity);
+            try {
+                cancelRestore(activity);
+            } catch (Exception clearError) {
+                error = clearError;
+            }
             Toast.makeText(activity, Errors.describe(error), Toast.LENGTH_LONG).show();
         }
     }
 
     static void onResume(Activity activity) {
-        SharedPreferences preferences = preferences(activity);
-        if (!preferences.getBoolean(PENDING, false)) return;
+        final SharedPreferences preferences;
         final Keystone.Snapshot saved;
         try {
+            preferences = preferences(activity);
+            if (!preferences.getBoolean(PENDING, false)) return;
             saved = read(preferences);
         } catch (Exception error) {
             cancelCallbacks();
@@ -65,10 +65,12 @@ final class OemFocus {
                     if (!saved.matches(Keystone.read())) {
                         throw new IllegalStateException("Keystone readback mismatch");
                     }
-                    preferences(activity).edit().clear().commit();
+                    clearRestored(preferences, saved);
                 }
             } catch (Exception error) {
                 showError(activity, error);
+            } finally {
+                if (pass == 3) restore = null;
             }
         };
         HANDLER.post(restore);
@@ -79,7 +81,32 @@ final class OemFocus {
     /** Cancel queued and persisted recovery so a newer keystone write is kept. */
     static void cancelRestore(Context context) {
         cancelCallbacks();
-        preferences(context).edit().clear().commit();
+        if (!preferences(context).edit().clear().commit()) {
+            throw new IllegalStateException("Keystone recovery clear failed");
+        }
+    }
+
+    private static boolean saveSnapshot(SharedPreferences preferences,
+            Keystone.Snapshot snapshot) {
+        SharedPreferences.Editor editor = preferences.edit();
+        editor.putBoolean(PENDING, true);
+        for (int i = 0; i < snapshot.inset.length; i++) {
+            editor.putInt(insetKey(i), snapshot.inset[i]);
+        }
+        editor.putFloat(ZOOM_H, snapshot.zoomH);
+        editor.putFloat(ZOOM_V, snapshot.zoomV);
+        return editor.commit();
+    }
+
+    private static void clearRestored(SharedPreferences preferences,
+            Keystone.Snapshot saved) {
+        if (preferences.edit().clear().commit()) return;
+        boolean retrySaved = saveSnapshot(preferences, saved);
+        IllegalStateException error = new IllegalStateException("Keystone recovery clear failed");
+        if (!retrySaved) {
+            error.addSuppressed(new IllegalStateException("Keystone recovery retry save failed"));
+        }
+        throw error;
     }
 
     private static Keystone.Snapshot read(SharedPreferences preferences) throws Exception {
@@ -93,8 +120,13 @@ final class OemFocus {
         }
         requireSaved(preferences, ZOOM_H);
         requireSaved(preferences, ZOOM_V);
-        return new Keystone.Snapshot(inset,
-                preferences.getFloat(ZOOM_H, 0f), preferences.getFloat(ZOOM_V, 0f));
+        float zoomH = preferences.getFloat(ZOOM_H, 0f);
+        float zoomV = preferences.getFloat(ZOOM_V, 0f);
+        if (Float.isNaN(zoomH) || Float.isInfinite(zoomH)
+                || Float.isNaN(zoomV) || Float.isInfinite(zoomV)) {
+            throw new IllegalStateException("Non-finite saved keystone zoom");
+        }
+        return new Keystone.Snapshot(inset, zoomH, zoomV);
     }
 
     private static void requireSaved(SharedPreferences preferences, String key) {

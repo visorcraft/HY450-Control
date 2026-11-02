@@ -36,6 +36,18 @@ public final class HostTests {
         malformed.put(INSET_KEYS[4], "bad");
         expectThrows(() -> Keystone.read(malformed::get), "malformed inset");
 
+        Map<String, String> malformedDecimal = validValues();
+        malformedDecimal.put(INSET_KEYS[0], "12.bad");
+        expectThrows(() -> Keystone.read(malformedDecimal::get), "malformed decimal inset");
+
+        Map<String, String> trailingJunk = validValues();
+        trailingJunk.put(INSET_KEYS[0], "12.9junk");
+        expectThrows(() -> Keystone.read(trailingJunk::get), "inset trailing junk");
+
+        Map<String, String> repeatedDecimal = validValues();
+        repeatedDecimal.put(INSET_KEYS[0], "1.2.3");
+        expectThrows(() -> Keystone.read(repeatedDecimal::get), "repeated decimal point");
+
         Map<String, String> empty = validValues();
         empty.put(INSET_KEYS[0], "  ");
         expectThrows(() -> Keystone.read(empty::get), "empty inset");

@@ -111,6 +111,9 @@ final class Keystone {
         if (raw == null) throw new NumberFormatException("Missing keystone inset");
         String value = raw.trim();
         if (value.length() == 0) throw new NumberFormatException("Empty keystone inset");
+        if (!value.matches("[+-]?\\d+(?:\\.\\d*)?")) {
+            throw new NumberFormatException("Malformed keystone inset");
+        }
         int dot = value.indexOf('.');
         if (dot >= 0) value = value.substring(0, dot);
         return Integer.parseInt(value);
