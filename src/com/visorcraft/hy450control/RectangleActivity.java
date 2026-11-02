@@ -10,7 +10,7 @@ public final class RectangleActivity extends Activity {
     public void onCreate(Bundle state) {
         super.onCreate(state);
         try {
-            OemFocus.cancelRestore();
+            OemFocus.cancelRestore(this);
             Keystone.Snapshot current = Keystone.read();
             int[] inset = WallRectangle.insets(WallRectangle.pose());
             Keystone.apply(new Keystone.Snapshot(inset, current.zoomH, current.zoomV));

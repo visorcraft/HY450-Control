@@ -59,12 +59,12 @@ public final class ProjectionActivity extends Activity {
         LinearLayout oem = chipRow(root);
         addChip(oem, "OEM focus and correction", v -> OemFocus.launch(this));
         addChip(oem, "OEM manual keystone", v -> {
-            OemFocus.cancelRestore();
+            OemFocus.cancelRestore(this);
             component("com.hysd.vafocus", "com.hysd.vafocus.TchjzActivity");
         });
         LinearLayout reset = chipRow(root);
         addChip(reset, "Full screen (reset keystone)", v -> run(() -> {
-            OemFocus.cancelRestore();
+            OemFocus.cancelRestore(this);
             ProjectionBackup.save(this);
             Class.forName("com.hysd.vafocus.PropertiesUtils")
                     .getMethod("keystone_reset", int.class).invoke(null, 1);

@@ -1,6 +1,7 @@
 package com.visorcraft.hy450control;
 
 import java.lang.reflect.Method;
+import java.util.Arrays;
 
 /** Live keystone insets. Order is ltx, lty, rtx, rty, lbx, lby, rbx, rby. */
 final class Keystone {
@@ -20,6 +21,10 @@ final class Keystone {
         true, false, true, false, true, false, true, false
     };
 
+    interface PropertyReader {
+        String get(String key) throws Exception;
+    }
+
     static final class Snapshot {
         final int[] inset = new int[8];
         final float zoomH;
@@ -30,15 +35,27 @@ final class Keystone {
             this.zoomH = zoomH;
             this.zoomV = zoomV;
         }
+
+        boolean matches(Snapshot other) {
+            return other != null && Arrays.equals(inset, other.inset)
+                    && Float.compare(zoomH, other.zoomH) == 0
+                    && Float.compare(zoomV, other.zoomV) == 0;
+        }
     }
 
     private Keystone() {}
 
     static Snapshot read() throws Exception {
+        return read(Keystone::property);
+    }
+
+    static Snapshot read(PropertyReader reader) throws Exception {
         int[] inset = new int[8];
-        for (int i = 0; i < DISPLAY.length; i++) inset[i] = parse(property(DISPLAY[i]), 0);
-        float zoomH = parseFloat(property("persist.display.keystone_zoom_h"), 100f);
-        float zoomV = parseFloat(property("persist.display.keystone_zoom_v"), 100f);
+        for (int i = 0; i < DISPLAY.length; i++) {
+            inset[i] = parseSnapshotInset(reader.get(DISPLAY[i]));
+        }
+        float zoomH = parseSnapshotFloat(reader.get("persist.display.keystone_zoom_h"));
+        float zoomV = parseSnapshotFloat(reader.get("persist.display.keystone_zoom_v"));
         return new Snapshot(inset, zoomH, zoomV);
     }
 
@@ -88,6 +105,26 @@ final class Keystone {
     private static void setProperty(String key, String value) throws Exception {
         Class.forName("android.os.SystemProperties")
                 .getMethod("set", String.class, String.class).invoke(null, key, value);
+    }
+
+    private static int parseSnapshotInset(String raw) {
+        if (raw == null) throw new NumberFormatException("Missing keystone inset");
+        String value = raw.trim();
+        if (value.length() == 0) throw new NumberFormatException("Empty keystone inset");
+        int dot = value.indexOf('.');
+        if (dot >= 0) value = value.substring(0, dot);
+        return Integer.parseInt(value);
+    }
+
+    private static float parseSnapshotFloat(String raw) {
+        if (raw == null) throw new NumberFormatException("Missing keystone zoom");
+        String value = raw.trim();
+        if (value.length() == 0) throw new NumberFormatException("Empty keystone zoom");
+        float parsed = Float.parseFloat(value);
+        if (Float.isNaN(parsed) || Float.isInfinite(parsed)) {
+            throw new NumberFormatException("Non-finite keystone zoom");
+        }
+        return parsed;
     }
 
     private static int parse(String raw, int fallback) {
