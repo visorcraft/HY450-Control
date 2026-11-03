@@ -5,7 +5,7 @@
   <br />
   A privileged control panel for the <b>HY450 Max</b> Android projector (Allwinner H713).
   <br />
-  Picture &amp; audio controls · projection backup · calibration tools · presets &amp; automation.
+  Picture &amp; audio controls · projection backup · calibration tools · automation · Playground.
 </p>
 
 <p align="center">
@@ -67,6 +67,9 @@ into the same directory, then verify the download:
 sha256sum -c sha256sums.txt
 ```
 
+The v1.5.1 APK SHA-256 is
+`3b8d1c5493f3f760f2bbc48aa424b2e793f9ed74589c00c2594039416077d521`.
+
 In a source checkout, place the downloaded APK in the Magisk module:
 
 ```bash
@@ -110,15 +113,16 @@ Run the host suite (plain-JVM behavior tests plus hostile capture-metadata cases
 ./tests/run-host.sh
 ```
 
-Run the Android fake-data suite against an explicit device serial:
+Run the Android rendering and fake-data suite against an explicit device serial:
 
 ```bash
 adb connect <projector-ip>:5555
 ./tests/run-device.sh <projector-ip>:5555
 ```
 
-The device suite uses temporary private paths, fake value access, and a fake
-job scheduler; it does not write live projection settings or schedule real jobs.
+The device suite renders all four ambient scenes and uses temporary private
+paths, fake value access, and a fake job scheduler; it does not write live
+projection settings or schedule real jobs.
 
 ### Install
 
@@ -157,7 +161,7 @@ partition, remove another module, or reset the projector.
 - **Quick overlay** - backlight, volume, input selection, visible readback, BACK dismissal, and a visible 15-second countdown without opening the full control panel. Launching the OEM input source dismisses the overlay first.
 - **Family presets** - save and reapply picture, audio, and input settings while skipping read-only controls and missing entries. Application continues after individual failures and reports applied/failed counts with capped per-control errors; success requires zero failures.
 - **Automation** - choose an app to launch after boot and set a sleep timer. Boot launch uses Android's job scheduler so the delayed work survives receiver completion; sleep selections are saved only after the alarm is scheduled successfully. Both are opt-in and can be switched off. Accessibility configuration uses Android's system settings instead of rewriting the enabled-service list.
-- **Playground** - a manual fullscreen arcade and ambient mode with D-pad Breakout, three lives, scoring, and a persistent best score, plus Starfield, Aurora, Fireplace, and Ocean waves scenes. Everything is rendered locally with Canvas and no assets, network access, or hardware-setting changes; animation pauses in the background.
+- **Playground** - manual fullscreen Breakout with 60 bricks, three lives, scoring, and a persistent best score, plus Starfield, Aurora, Fireplace, and Ocean waves. LEFT/RIGHT moves the paddle or changes scenes; CENTRE launches, pauses, or retries; BACK returns to the menu. Everything renders locally with Canvas and no assets, network access, or hardware-setting changes; animation pauses in the background.
 
 ## Safety model
 
@@ -197,11 +201,11 @@ partition, remove another module, or reset the projector.
 
 | Path | Purpose |
 |---|---|
-| `src/com/visorcraft/hy450control/` | Complete Java app: dashboard, hardware adapters, backup/preset stores, overlay, automation, and calibration UI. |
+| `src/com/visorcraft/hy450control/` | Complete Java app: dashboard, hardware adapters, backup/preset stores, overlay, automation, calibration, and Playground. |
 | `res/` + `AndroidManifest.xml` | App resources, component declarations, and privileged permission requests. |
 | `module/` | Magisk metadata and priv-app permission allowlist. The generated APK is excluded. |
 | `build.sh` | SDK-only Java 8/APK build and debug signing; no Gradle or third-party runtime libraries. |
-| `tests/` | Plain-JVM host and Android `app_process` fake-data regression suites with explicit-device adb runner. |
+| `tests/` | Plain-JVM host and Android `app_process` rendering/fake-data regression suites with explicit-device adb runner. |
 | `install.sh` / `uninstall.sh` | Explicit-device Magisk module installation and removal. |
 | `capture/` | Original ARMv7 V4L2 camera diagnostic and frame-capture scripts. |
 | `probe/TvProbe.java` | Small read-only-by-default Allwinner display API probe used for hardware validation. |
