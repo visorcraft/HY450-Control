@@ -95,11 +95,42 @@ public final class DeviceTests {
         check(rejected, "JSON null property must be rejected");
         check("12.5".equals(properties.get(property)), "rejected property must not be written");
 
+        testAmbientScenes();
         testBootScheduling();
         testProjectionValidationRejectsBeforeWrites();
         testReadBackup();
         testBackupStoreDoesNotOverwrite();
         System.out.println("Device tests passed");
+    }
+
+    private static void testAmbientScenes() {
+        android.graphics.Bitmap blank = android.graphics.Bitmap.createBitmap(
+                320, 180, android.graphics.Bitmap.Config.ARGB_8888);
+        try {
+            AmbientScene[] scenes = AmbientScenes.create();
+            String[] expected = {"Starfield", "Aurora", "Fireplace", "Ocean waves"};
+            check(scenes.length == expected.length, "four scenes in menu order");
+            for (int i = 0; i < scenes.length; i++) {
+                check(expected[i].equals(scenes[i].title()), "scene title/order");
+                android.graphics.Bitmap first = android.graphics.Bitmap.createBitmap(
+                        320, 180, android.graphics.Bitmap.Config.ARGB_8888);
+                android.graphics.Bitmap second = android.graphics.Bitmap.createBitmap(
+                        320, 180, android.graphics.Bitmap.Config.ARGB_8888);
+                try {
+                    android.graphics.Paint paint = new android.graphics.Paint(
+                            android.graphics.Paint.ANTI_ALIAS_FLAG);
+                    scenes[i].draw(new android.graphics.Canvas(first), paint, 320, 180, 0f);
+                    scenes[i].draw(new android.graphics.Canvas(second), paint, 320, 180, 1f);
+                    check(!first.sameAs(second), expected[i] + " must animate");
+                    check(!first.sameAs(blank), expected[i] + " must draw nonblank output");
+                } finally {
+                    first.recycle();
+                    second.recycle();
+                }
+            }
+        } finally {
+            blank.recycle();
+        }
     }
 
     private static void testBootScheduling() {

@@ -58,8 +58,8 @@ Verified on the retail development unit (Android 14 build
 
 ## Quick start
 
-The current signed release is **v1.5.0** (version code **10**). Download
-`hy450-control-1.5.0.apk` and `sha256sums.txt` from the
+The current signed release is **v1.5.1** (version code **11**). Download
+`hy450-control-1.5.1.apk` and `sha256sums.txt` from the
 [latest GitHub release](https://github.com/visorcraft/HY450-Control/releases/latest)
 into the same directory, then verify the download:
 
@@ -71,7 +71,7 @@ In a source checkout, place the downloaded APK in the Magisk module:
 
 ```bash
 mkdir -p module/system/priv-app/HY450Control
-cp /path/to/hy450-control-1.5.0.apk \
+cp /path/to/hy450-control-1.5.1.apk \
   module/system/priv-app/HY450Control/HY450Control.apk
 ```
 
@@ -104,7 +104,7 @@ builds are non-debuggable.
 
 ### Regression tests
 
-Run the plain-JVM host suite:
+Run the host suite (plain-JVM behavior tests plus hostile capture-metadata cases):
 
 ```bash
 ./tests/run-host.sh
@@ -157,6 +157,7 @@ partition, remove another module, or reset the projector.
 - **Quick overlay** - backlight, volume, input selection, visible readback, BACK dismissal, and a visible 15-second countdown without opening the full control panel. Launching the OEM input source dismisses the overlay first.
 - **Family presets** - save and reapply picture, audio, and input settings while skipping read-only controls and missing entries. Application continues after individual failures and reports applied/failed counts with capped per-control errors; success requires zero failures.
 - **Automation** - choose an app to launch after boot and set a sleep timer. Boot launch uses Android's job scheduler so the delayed work survives receiver completion; sleep selections are saved only after the alarm is scheduled successfully. Both are opt-in and can be switched off. Accessibility configuration uses Android's system settings instead of rewriting the enabled-service list.
+- **Playground** - a manual fullscreen arcade and ambient mode with D-pad Breakout, three lives, scoring, and a persistent best score, plus Starfield, Aurora, Fireplace, and Ocean waves scenes. Everything is rendered locally with Canvas and no assets, network access, or hardware-setting changes; animation pauses in the background.
 
 ## Safety model
 
@@ -235,12 +236,24 @@ temperature, gamma, and dynamic-backlight values.
 
 ## Verified on hardware
 
+The v1.5.1/versionCode 11 candidate was installed through the reversible Magisk
+module and verified at 1920×1080. The locally signed candidate APK SHA-256 is
+`25f019cfb647397428245a34e6b624c65af9ff2f0776e9c3201cf01d614c9b2b`; the
+stable-key GitHub release APK is a distinct artifact.
+
+The 1.5.1 checks included:
+
+- Dashboard D-pad navigation to Playground, all four ambient scenes, scene wrapping, BACK paths, and byte-identical paused frames across both a timed pause and HOME/resume.
+- Breakout paddle control, scoring, pause, three life losses, game over, and retry. Best score 40 survived force-stop/recreation; win-state and collision edge cases passed the pure-Java regressions.
+- Readable filled calibration help text on the RGB pattern, pattern wrapping, and BACK exit. An immersive-startup ordering issue found during Playground testing was fixed and the same navigation path was rerun successfully.
+- Exact preservation of all 32 projection properties, every other global setting except the expected two-reboot `boot_count` increment, all 12 disabled packages, Projectivy startup/accessibility, sleep-off state, and the framework patch. No new crash appeared after the corrected candidate launched.
+
 The post-release safety and de-duplication source through `cb20e75` was also
-installed and verified on the development unit. This local candidate is
+installed and verified on the development unit. This earlier local candidate is
 distinct from the signed v1.3.0 release artifact, although both report version
 1.3.0/versionCode 8.
 
-The development-unit checks included:
+The development-unit checks also included:
 
 - Backlight write/readback/restore (`100 → 101 → 100`).
 - Original-value restoration of all 15 picture values, including backlight.

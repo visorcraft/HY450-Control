@@ -1,5 +1,6 @@
 package com.visorcraft.hy450control;
 
+import android.app.Activity;
 import android.content.Context;
 import android.content.res.ColorStateList;
 import android.graphics.Canvas;
@@ -19,6 +20,8 @@ import android.util.DisplayMetrics;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
+import android.view.WindowInsets;
+import android.view.WindowInsetsController;
 import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -49,6 +52,15 @@ public final class Ui {
     private static final Typeface BLACK = Typeface.create("sans-serif-black", Typeface.NORMAL);
 
     private Ui() {
+    }
+
+    public static void hideSystemBars(Activity activity) {
+        activity.getWindow().setDecorFitsSystemWindows(false);
+        WindowInsetsController controller = activity.getWindow().getInsetsController();
+        if (controller == null) return;
+        controller.hide(WindowInsets.Type.systemBars());
+        controller.setSystemBarsBehavior(
+                WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
     }
 
     public static float scale(Context context) {

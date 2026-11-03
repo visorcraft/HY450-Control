@@ -70,6 +70,12 @@ public class MainActivity extends Activity {
                 v -> startService(new Intent(this, OverlayService.class)));
         root.addView(automate);
 
+        root.addView(Ui.section(this, "PLAY", GAP_PX));
+        LinearLayout play = row();
+        destinationTile(play, "Playground", "Breakout + ambient scenes",
+                v -> startActivity(new Intent(this, PlaygroundActivity.class)));
+        root.addView(play);
+
         root.addView(Ui.section(this, "ADVANCED · OEM TOOLS", GAP_PX));
         LinearLayout tools = row();
         oemTool(tools, "OEM input source", "com.softwinner.awsource",

@@ -28,6 +28,7 @@
         <activity android:name=".ControlPageActivity" android:exported="false" />
         <activity android:name=".ProjectionActivity" android:exported="false" />
         <activity android:name=".AutomationActivity" android:exported="false" />
+        <activity android:name=".PlaygroundActivity" android:exported="false" />
         <service android:name=".OverlayService" android:exported="false" />
         <service
             android:name=".BootLaunchService"

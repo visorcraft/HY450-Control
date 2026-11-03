@@ -9,6 +9,8 @@ rm -rf "$OUT"
 mkdir -p "$CLASSES"
 javac -source 8 -target 8 -cp "$PLATFORM" -d "$CLASSES" \
   src/com/visorcraft/hy450control/AutomationSelection.java \
+  src/com/visorcraft/hy450control/BestScore.java \
+  src/com/visorcraft/hy450control/BreakoutGame.java \
   src/com/visorcraft/hy450control/Control.java \
   src/com/visorcraft/hy450control/ControlAdapter.java \
   src/com/visorcraft/hy450control/ControlBatch.java \
@@ -18,9 +20,11 @@ javac -source 8 -target 8 -cp "$PLATFORM" -d "$CLASSES" \
   src/com/visorcraft/hy450control/OemRecovery.java \
   src/com/visorcraft/hy450control/ProjectionBackup.java \
   src/com/visorcraft/hy450control/ReadOnlyControl.java \
+  src/com/visorcraft/hy450control/SleepSchedule.java \
   src/com/visorcraft/hy450control/Vendor.java \
   src/com/visorcraft/hy450control/VendorControl.java \
   src/com/visorcraft/hy450control/VendorIntControl.java \
   src/com/visorcraft/hy450control/VendorBooleanControl.java \
   src/com/visorcraft/hy450control/VendorEnumControl.java tests/HostTests.java
 java -cp "$PLATFORM:$CLASSES" com.visorcraft.hy450control.HostTests
+bash tests/capture-metadata-tests.sh

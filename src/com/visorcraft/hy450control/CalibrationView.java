@@ -46,6 +46,7 @@ public final class CalibrationView extends View {
             case 4: greyscale(canvas, w, h); break;
             default: solids(canvas, w, h); break;
         }
+        paint.setStyle(Paint.Style.FILL);
         paint.setTextSize(32);
         paint.setTextAlign(Paint.Align.LEFT);
         paint.setColor(Color.WHITE);

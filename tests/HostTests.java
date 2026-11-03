@@ -111,6 +111,9 @@ public final class HostTests {
         testOemRecovery();
         testProjectionValidation();
         testAutomationSelection();
+        testSleepSchedule();
+        testBestScore();
+        testBreakoutGame();
         testVendorAdapters();
 
         Map<String, String> valid = validValues();
@@ -463,6 +466,171 @@ public final class HostTests {
             if (mismatch && setCalls == 1) return;
             if (rollbackFailure && setCalls == 2) throw new Exception("rollback failure");
             this.value = value;
+        }
+    }
+
+    private static void testBreakoutGame() throws Exception {
+        BreakoutGame game = new BreakoutGame();
+        check(game.phase() == BreakoutGame.Phase.READY, "round starts ready");
+        check(game.score() == 0 && game.lives() == 3 && game.bricksRemaining() == 60,
+                "round initial state");
+        check(game.isBrickAlive(0) && game.isBrickAlive(59), "all bricks initially alive");
+        game.setDirection(-1);
+        advance(game, 10);
+        check(game.paddleX() == 80f && game.ballX() == 80f,
+                "paddle and attached ball clamp at left edge");
+        game.setDirection(1);
+        advance(game, 20);
+        check(game.paddleX() == 920f, "paddle clamps at right edge");
+        game.setDirection(0);
+        game.centre();
+        check(game.phase() == BreakoutGame.Phase.RUNNING, "centre launches");
+        game.centre();
+        check(game.phase() == BreakoutGame.Phase.PAUSED, "centre pauses");
+        float pausedY = game.ballY();
+        advance(game, 1);
+        check(game.ballY() == pausedY, "paused ball does not move");
+        game.centre();
+        check(game.phase() == BreakoutGame.Phase.RUNNING, "centre resumes");
+
+        game = new BreakoutGame();
+        arrangeBall(game, 5f, 300f, -480f, 0f);
+        game.update(1f / 120);
+        check(game.ballVelocityX() > 0, "side wall reflects horizontal velocity");
+        arrangeBall(game, 500f, 5f, 0f, -480f);
+        game.update(1f / 120);
+        check(game.ballVelocityY() > 0, "top wall reflects vertical velocity");
+
+        game = new BreakoutGame();
+        arrangeBall(game, 540f, 540f, 0f, 480f);
+        game.update(1f / 120);
+        check(game.ballVelocityX() > 0 && game.ballVelocityY() < 0,
+                "off-centre paddle hit aims the rebound");
+
+        game = new BreakoutGame();
+        arrangeBall(game, 50f, 110f, 0f, -480f);
+        game.update(1f / 120);
+        check(game.score() == 10 && game.bricksRemaining() == 59,
+                "one brick scores exactly ten");
+        check(!game.isBrickAlive(0), "hit brick is removed");
+        check(game.ballVelocityY() > 0, "brick reflects the ball");
+        arrangeBall(game, 50f, 110f, 0f, -480f);
+        game.update(1f / 120);
+        check(game.score() == 10 && game.bricksRemaining() == 59 && !game.isBrickAlive(0),
+                "colliding with a removed brick cannot score or remove it again");
+
+        game = new BreakoutGame();
+        boolean[] lastBrick = new boolean[60];
+        lastBrick[0] = true;
+        setGameField(game, "bricks", lastBrick);
+        setGameField(game, "score", 590);
+        arrangeBall(game, 50f, 110f, 0f, -480f);
+        game.update(1f / 120);
+        check(game.phase() == BreakoutGame.Phase.WON && game.score() == 600,
+                "last brick wins the round");
+        game.centre();
+        check(game.phase() == BreakoutGame.Phase.READY && game.score() == 0
+                && game.lives() == 3 && game.bricksRemaining() == 60,
+                "centre resets a won round");
+
+        game = new BreakoutGame();
+        for (int lives = 2; lives >= 0; lives--) {
+            arrangeBall(game, 500f, 605f, 0f, 480f);
+            game.update(1f / 120);
+            check(game.lives() == lives, "bottom loss decrements one life");
+            if (lives > 0) {
+                check(game.phase() == BreakoutGame.Phase.READY,
+                        "remaining lives return to READY");
+                check(game.ballX() == game.paddleX() && game.ballY() == 540f,
+                        "remaining lives reattach the ball to the paddle");
+                check(game.ballVelocityX() == 0f && game.ballVelocityY() == -480f,
+                        "remaining lives reset launch velocity");
+                game.centre();
+                check(game.phase() == BreakoutGame.Phase.RUNNING,
+                        "centre relaunches after life loss");
+            }
+        }
+        check(game.phase() == BreakoutGame.Phase.GAME_OVER,
+                "zero lives ends the round");
+        game.centre();
+        check(game.phase() == BreakoutGame.Phase.READY && game.score() == 0
+                && game.lives() == 3 && game.bricksRemaining() == 60,
+                "centre resets a lost round");
+    }
+
+    private static void advance(BreakoutGame game, float seconds) {
+        int steps = Math.round(seconds * 120);
+        for (int i = 0; i < steps; i++) game.update(1f / 120);
+    }
+
+    private static void arrangeBall(BreakoutGame game, float x, float y,
+            float velocityX, float velocityY) throws Exception {
+        setGameField(game, "phase", BreakoutGame.Phase.RUNNING);
+        setGameField(game, "ballX", x);
+        setGameField(game, "ballY", y);
+        setGameField(game, "ballVelocityX", velocityX);
+        setGameField(game, "ballVelocityY", velocityY);
+    }
+
+    private static void setGameField(BreakoutGame game, String name, Object value)
+            throws Exception {
+        java.lang.reflect.Field field = BreakoutGame.class.getDeclaredField(name);
+        field.setAccessible(true);
+        if (value instanceof Integer) {
+            field.setInt(game, (Integer) value);
+        } else if (value instanceof Float) {
+            field.setFloat(game, (Float) value);
+        } else {
+            field.set(game, value);
+        }
+    }
+
+    private static void testBestScore() {
+        BestScore best = new BestScore(40);
+        check(best.get() == 40, "stored best initializes the tracker");
+        check(!best.update(40) && !best.update(30),
+                "equal and lower scores do not notify");
+        check(best.update(50) && best.get() == 50,
+                "higher score updates and notifies once");
+        check(!best.update(50), "repeated score does not notify again");
+        check(!best.update(0) && best.get() == 50,
+                "new-round zero score preserves the best");
+    }
+
+    private static void testSleepSchedule() throws Exception {
+        FakeSleepScheduler scheduler = new FakeSleepScheduler();
+        scheduler.existing = true;
+        scheduler.fail = true;
+        expectThrows(() -> SleepSchedule.set(15, scheduler),
+                "replacement scheduling failure must propagate");
+        check(scheduler.existing && scheduler.cancelCalls == 0,
+                "failed replacement must preserve the previous alarm");
+        scheduler.fail = false;
+        SleepSchedule.set(30, scheduler);
+        check(scheduler.scheduledMinutes == 30 && scheduler.cancelCalls == 0,
+                "positive durations replace without cancelling first");
+        SleepSchedule.set(0, scheduler);
+        check(!scheduler.existing && scheduler.cancelCalls == 1,
+                "disabling explicitly cancels the alarm");
+    }
+
+    private static final class FakeSleepScheduler implements SleepSchedule.Scheduler {
+        boolean existing;
+        boolean fail;
+        int scheduledMinutes = -1;
+        int cancelCalls;
+
+        @Override
+        public void schedule(int minutes) {
+            if (fail) throw new SecurityException("Exact alarms denied");
+            scheduledMinutes = minutes;
+            existing = true;
+        }
+
+        @Override
+        public void cancel() {
+            cancelCalls++;
+            existing = false;
         }
     }
 

@@ -10,7 +10,7 @@
 
 ## Completion outcome
 
-All reviewed production fixes, behavioral regressions, de-duplication, dead-code removal, and documentation updates are present in the uncommitted working tree. Host tests, shell syntax checks, the signed non-debuggable build, diff checks, and sanitization checks passed. Independent final review found no remaining Critical or Important issues after its three follow-up findings were fixed. The Android suite and its new boot/backup tests compile successfully, but could not execute because the documented development unit was unreachable over adb; no hardware verification or installation is claimed.
+All reviewed production fixes, behavioral regressions, de-duplication, dead-code removal, and documentation updates were released in v1.5.0. Host tests, shell syntax checks, the signed non-debuggable build, diff checks, and sanitization checks passed. Independent final review found no remaining Critical or Important issues after its three follow-up findings were fixed. The Android suite initially could not execute because the development unit was unreachable; connectivity later returned, and the complete Android suite passed during the v1.5.1 hardware-verification cycle.
 
 ## Global Constraints
 

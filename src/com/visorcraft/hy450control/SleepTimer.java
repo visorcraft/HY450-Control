@@ -11,11 +11,18 @@ final class SleepTimer {
     static void set(Context context, int minutes) {
         AlarmManager alarms = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
         PendingIntent action = action(context);
-        alarms.cancel(action);
-        if (minutes > 0) {
-            alarms.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP,
-                    System.currentTimeMillis() + minutes * 60_000L, action);
-        }
+        SleepSchedule.set(minutes, new SleepSchedule.Scheduler() {
+            @Override
+            public void schedule(int value) {
+                alarms.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP,
+                        System.currentTimeMillis() + value * 60_000L, action);
+            }
+
+            @Override
+            public void cancel() {
+                alarms.cancel(action);
+            }
+        });
     }
 
     static void sleepNow(Context context) throws Exception {

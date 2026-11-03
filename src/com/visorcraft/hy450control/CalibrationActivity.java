@@ -3,8 +3,6 @@ package com.visorcraft.hy450control;
 import android.app.Activity;
 import android.os.Bundle;
 import android.view.KeyEvent;
-import android.view.WindowInsets;
-import android.view.WindowInsetsController;
 
 public final class CalibrationActivity extends Activity {
     private CalibrationView view;
@@ -13,7 +11,7 @@ public final class CalibrationActivity extends Activity {
         super.onCreate(state);
         view = new CalibrationView(this);
         setContentView(view);
-        hideSystemBars();
+        Ui.hideSystemBars(this);
     }
 
     public boolean onKeyDown(int code, KeyEvent event) {
@@ -26,15 +24,6 @@ public final class CalibrationActivity extends Activity {
 
     public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
-        if (hasFocus) hideSystemBars();
-    }
-
-    private void hideSystemBars() {
-        getWindow().setDecorFitsSystemWindows(false);
-        WindowInsetsController controller = getWindow().getInsetsController();
-        if (controller == null) return;
-        controller.hide(WindowInsets.Type.systemBars());
-        controller.setSystemBarsBehavior(
-                WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+        if (hasFocus) Ui.hideSystemBars(this);
     }
 }

@@ -29,19 +29,13 @@ width=
 height=
 fourcc=
 stride=
-source "$OUTPUT.meta"
+source capture/metadata.sh
+hy450_read_metadata "$OUTPUT.meta"
 if [[ "$fourcc" == "MJPG" ]]; then
   ffmpeg -hide_banner -loglevel error -y -i "$OUTPUT.raw" -frames:v 1 "$OUTPUT"
-elif [[ "$fourcc" == "YUYV" ]]; then
-  if [[ "$stride" -ne $((width * 2)) ]]; then
-    echo "Unsupported YUYV stride: $stride" >&2
-    exit 1
-  fi
+else
   ffmpeg -hide_banner -loglevel error -y -f rawvideo -pixel_format yuyv422 \
     -video_size "${width}x${height}" -i "$OUTPUT.raw" -frames:v 1 "$OUTPUT"
-else
-  echo "Unsupported captured format: $fourcc" >&2
-  exit 1
 fi
 rm -f "$OUTPUT.raw" "$OUTPUT.meta"
 adb -s "$DEVICE" shell 'rm -f /data/local/tmp/hy450-v4l2'

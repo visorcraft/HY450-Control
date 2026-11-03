@@ -10,6 +10,8 @@ REMOTE="/data/local/tmp/hy450-control-device-tests"
 rm -rf "$OUT"
 mkdir -p "$OUT/classes" "$OUT/dex"
 javac -source 8 -target 8 -cp "$PLATFORM" -d "$OUT/classes" \
+  src/com/visorcraft/hy450control/AmbientScene.java \
+  src/com/visorcraft/hy450control/AmbientScenes.java \
   src/com/visorcraft/hy450control/BackupStore.java \
   src/com/visorcraft/hy450control/BootLaunchService.java \
   src/com/visorcraft/hy450control/BootReceiver.java \
