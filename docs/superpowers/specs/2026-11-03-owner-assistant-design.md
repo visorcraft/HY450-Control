@@ -12,7 +12,7 @@ Add an **Owner Assistant** destination to the dashboard before the advanced OEM 
 
 1. **Setup check** — explain that the scan is read-only, then read every picture, audio, and source control. Show readable, writable, unavailable, and failed counts plus per-control errors. No setup step writes a setting.
 2. **Routines** — provide Movie, Day, Night, and Custom slots. Each slot starts empty. **Save current** captures the current writable/readable controls across all three families; **Apply** restores that slot; **Undo previous apply** restores the values captured immediately before the most recent routine application. Empty slots cannot be applied. Saving an occupied slot and applying a routine require explicit confirmation.
-3. **Backup & recovery** — export a fresh portable backup through Android's Storage Access Framework, import and preview a user-selected backup, and restore only after a separate confirmation. Import alone never writes projector settings. A preview identifies the backup type, creation time, firmware compatibility, included families/projection values, and any incomplete capture warnings.
+3. **Backup & recovery** — export a fresh portable backup through Android's Storage Access Framework, import and preview a user-selected backup, and restore only after a separate confirmation. Import alone never writes projector settings. A preview identifies the backup type, creation time, firmware compatibility, included families/projection values, and any incomplete capture warnings. A separate **Recover pre-restore state** action appears when a safety copy exists and requires its own preview and confirmation.
 4. **Diagnostic report** — export a sanitized JSON compatibility report through the Storage Access Framework. The report contains app version, Android/SDK and build fingerprint, scan results, and allowlisted control error summaries. It does not contain serial numbers, IP/MAC addresses, accounts, installed-app inventories, logcat, arbitrary system properties, or network data.
 
 Setup completion and scan results may be remembered locally, but opening Owner Assistant never starts a scan, backup, restore, or routine automatically. There is no forced first-run wizard and no network access.
@@ -27,11 +27,11 @@ Add a small `CapabilityReport` model and scanner around `ControlPageActivity.loa
 
 Add a `RoutineStore` using the same private-directory and atomic-file conventions as `PresetStore` and `JsonFileStore`. Use a versioned JSON document with four fixed slot IDs and stable control IDs grouped by family. Fixed slot names avoid requiring text entry with the remote; renaming is outside this milestone.
 
-Capture only controls that are both writable and readable. Record unreadable/unavailable controls as warnings and omit their values. A slot with no captured values remains empty. Replacing a slot is atomic, so a failed capture or write leaves the previous slot intact.
+Capture only controls that are writable, readable, and whose current value belongs to the adapter's writable domain. Record unreadable, unavailable, or out-of-range controls as warnings and omit their values; never clamp a captured value. A slot with no captured values remains empty. Replacing a slot is atomic, so a failed capture or write leaves the previous slot intact.
 
-Add a `RoutineEngine` that validates a complete routine before its first write and applies each present family through `ControlBatch`. Missing controls and read-only controls remain skipped; individual write failures follow existing continuation and capped-error behavior. Before the first write, atomically save a pre-apply snapshot of all currently readable/writable values in a separate undo document. Keep that snapshot after success, failure, process death, and reboot until a later routine apply replaces it. Undo is always user-initiated, uses the same validated batch path, reports partial failures, and never runs automatically on resume.
+Add a `RoutineEngine` that validates a complete routine, including every value's writable domain, before its first write and applies each present family through `ControlBatch`. Missing controls and read-only controls remain skipped; individual write failures follow existing continuation and capped-error behavior. Before the first write, atomically save a pre-apply snapshot using the same capture rules and warnings in a separate undo document. Show any undo-capture omissions before the user confirms the apply. Keep the snapshot after success, failure, process death, and reboot until a later routine apply replaces it. Undo is always user-initiated, uses the same validated batch path, reports partial failures, and never runs automatically on resume.
 
-Routine application order is picture, audio, then source. The known firmware limitation affecting source-preset application remains an explicit per-control failure rather than being hidden. Routines do not include projection geometry, startup apps, sleep alarms, accessibility, package state, or framework settings.
+Routine application order is picture, audio, then source. The known firmware limitation affecting source-preset application remains an explicit per-control failure or capture warning rather than being hidden. Routines do not include projection geometry, startup apps, sleep alarms, accessibility, package state, or framework settings.
 
 ### Portable backup and recovery
 
@@ -39,15 +39,15 @@ Define a new schema-1 `hy450-control-backup` JSON document containing:
 
 - creation time and creating app version;
 - the exact Android build fingerprint;
-- current picture, audio, and source values for readable/writable controls;
-- capture warnings for omitted controls;
+- current picture, audio, and source values that are readable and within each writable adapter's domain;
+- capture warnings for omitted, unreadable, or out-of-range controls;
 - the existing allowlisted projection-backup values, preserving absent versus empty global values.
 
-Use `ACTION_CREATE_DOCUMENT` and `ACTION_OPEN_DOCUMENT` with JSON MIME types and content URIs. Add a narrow stream/document abstraction so parsing, size limits, and I/O failures can be tested without a real document provider. Reject files larger than 1 MiB before parsing. Do not accept filesystem paths, arbitrary setting names, executable content, or additional JSON fields that imply writes outside the existing allowlists.
+Use `ACTION_CREATE_DOCUMENT` and `ACTION_OPEN_DOCUMENT` with JSON MIME types and content URIs. Add a narrow stream/document abstraction so parsing, size limits, and I/O failures can be tested without a real document provider. Read at most 1 MiB plus one byte and reject any larger input before parsing, regardless of metadata reported by the provider. Do not accept filesystem paths, arbitrary setting names, executable content, or additional JSON fields that imply writes outside the existing allowlists.
 
 Validate the entire document, all control IDs and value types, adapter ranges, projection keys and values, and the exact firmware fingerprint before the first restore write. Unknown controls and unsupported schemas are errors for portable backups rather than silently ignored entries. A firmware mismatch permits inspection but disables restore. Incomplete backups remain restorable only after the preview clearly identifies omitted values and the user confirms.
 
-Before restoring, capture a fresh private safety copy of the current portable state. Restore picture, audio, and source through `ControlBatch`, and projection through the existing validated `ProjectionBackup` path. Do not reset keystone during capture. Cancel pending OEM keystone recovery before projection restoration, as the existing projection flow does. Report applied/failed counts and preserve the safety copy for explicit recovery; never automatically roll back or restore on a later launch.
+After import validation and before a confirmed restore, capture a fresh private safety copy of the current portable state. Include any safety-copy omissions in the final confirmation. Replace the previous safety copy only after the new capture is complete and atomically stored. Restore picture, audio, and source through `ControlBatch`, and projection through the existing validated `ProjectionBackup` path. Do not reset keystone during capture. Cancel pending OEM keystone recovery immediately before projection restoration, as the existing projection flow does. Report applied/failed counts and preserve the safety copy for explicit recovery; never automatically roll back or restore on a later launch. Recovery uses the same validation and confirmation path and does not overwrite the safety copy being recovered; only a new portable restore replaces it.
 
 ### Diagnostics
 
