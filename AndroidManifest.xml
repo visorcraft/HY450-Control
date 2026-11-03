@@ -30,6 +30,10 @@
         <activity android:name=".AutomationActivity" android:exported="false" />
         <service android:name=".OverlayService" android:exported="false" />
         <service
+            android:name=".BootLaunchService"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
+        <service
             android:name=".RemoteAccessibilityService"
             android:exported="true"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">

@@ -12,6 +12,7 @@ public final class DeviceTests {
     private static final class FakeAccess implements ProjectionBackup.ValueAccess {
         private final Map<String, String> globals;
         private final Map<String, String> properties;
+        int writes;
 
         FakeAccess(Map<String, String> globals, Map<String, String> properties) {
             this.globals = globals;
@@ -25,6 +26,7 @@ public final class DeviceTests {
 
         @Override
         public void putGlobal(String key, String value) {
+            writes++;
             if (value == null) {
                 globals.remove(key);
             } else {
@@ -39,6 +41,7 @@ public final class DeviceTests {
 
         @Override
         public void putProperty(String key, String value) {
+            writes++;
             if (value == null) {
                 properties.remove(key);
             } else {
@@ -92,9 +95,119 @@ public final class DeviceTests {
         check(rejected, "JSON null property must be rejected");
         check("12.5".equals(properties.get(property)), "rejected property must not be written");
 
+        testBootScheduling();
+        testProjectionValidationRejectsBeforeWrites();
         testReadBackup();
         testBackupStoreDoesNotOverwrite();
         System.out.println("Device tests passed");
+    }
+
+    private static void testBootScheduling() {
+        FakeJobScheduler scheduler = new FakeJobScheduler();
+        android.content.Context context = new android.content.ContextWrapper(null) {
+            @Override
+            public String getPackageName() {
+                return "com.visorcraft.hy450control";
+            }
+
+            @Override
+            public Object getSystemService(String name) {
+                return JOB_SCHEDULER_SERVICE.equals(name) ? scheduler : null;
+            }
+        };
+        BootReceiver receiver = new BootReceiver();
+        receiver.onReceive(context, new android.content.Intent("unrelated"));
+        check(scheduler.scheduled == null, "unrelated broadcast must not schedule");
+        receiver.onReceive(context,
+                new android.content.Intent(android.content.Intent.ACTION_BOOT_COMPLETED));
+        check(scheduler.scheduled != null, "boot must schedule durable delayed work");
+        check(scheduler.scheduled.getId() == 1001, "boot job ID must remain stable");
+        check(scheduler.scheduled.getMinLatencyMillis() == 20_000L,
+                "boot launch delay must remain 20 seconds");
+        check(BootLaunchService.class.getName().equals(
+                scheduler.scheduled.getService().getClassName()),
+                "boot job must target the launch service");
+    }
+
+    private static final class FakeJobScheduler extends android.app.job.JobScheduler {
+        android.app.job.JobInfo scheduled;
+
+        @Override
+        public int schedule(android.app.job.JobInfo job) {
+            scheduled = job;
+            return RESULT_SUCCESS;
+        }
+
+        @Override
+        public int enqueue(android.app.job.JobInfo job, android.app.job.JobWorkItem work) {
+            return schedule(job);
+        }
+
+        @Override
+        public void cancel(int jobId) {
+            if (scheduled != null && scheduled.getId() == jobId) scheduled = null;
+        }
+
+        @Override
+        public void cancelAll() {
+            scheduled = null;
+        }
+
+        @Override
+        public java.util.List<android.app.job.JobInfo> getAllPendingJobs() {
+            return scheduled == null ? java.util.Collections.emptyList()
+                    : java.util.Collections.singletonList(scheduled);
+        }
+
+        @Override
+        public android.app.job.JobInfo getPendingJob(int jobId) {
+            return scheduled != null && scheduled.getId() == jobId ? scheduled : null;
+        }
+    }
+
+    private static void testProjectionValidationRejectsBeforeWrites() throws Exception {
+        JSONObject valid = new JSONObject();
+        valid.put("global:GsInitXYZ", JSONObject.NULL);
+        valid.put("property:persist.display.keystone_ltx", "12.5");
+        FakeAccess validAccess = new FakeAccess(new HashMap<>(), new HashMap<>());
+        ProjectionBackup.restoreValues(valid, validAccess);
+        check(validAccess.writes == 2, "valid partial backup must still restore");
+
+        JSONObject unknownGlobal = new JSONObject(valid.toString());
+        unknownGlobal.put("global:Unknown", "value");
+        expectInvalidBeforeWrites(unknownGlobal, "unknown global must fail before writes");
+
+        JSONObject unknownProperty = new JSONObject(valid.toString());
+        unknownProperty.put("property:persist.display.unknown", "value");
+        expectInvalidBeforeWrites(unknownProperty, "unknown property must fail before writes");
+
+        JSONObject malformed = new JSONObject(valid.toString());
+        malformed.put("malformed", "value");
+        expectInvalidBeforeWrites(malformed, "malformed key must fail before writes");
+
+        JSONObject numericGlobal = new JSONObject(valid.toString());
+        numericGlobal.put("global:JbCamX", 12);
+        expectInvalidBeforeWrites(numericGlobal, "numeric global must fail before writes");
+
+        JSONObject numericProperty = new JSONObject(valid.toString());
+        numericProperty.put("property:persist.display.keystone_zoom_h", 100);
+        expectInvalidBeforeWrites(numericProperty, "numeric property must fail before writes");
+
+        JSONObject nullProperty = new JSONObject(valid.toString());
+        nullProperty.put("property:persist.display.keystone_zoom_v", JSONObject.NULL);
+        expectInvalidBeforeWrites(nullProperty, "null property must fail before writes");
+    }
+
+    private static void expectInvalidBeforeWrites(JSONObject values, String message) {
+        FakeAccess access = new FakeAccess(new HashMap<>(), new HashMap<>());
+        boolean thrown = false;
+        try {
+            ProjectionBackup.restoreValues(values, access);
+        } catch (Exception expected) {
+            thrown = true;
+        }
+        check(thrown, message);
+        check(access.writes == 0, message + " with zero writes");
     }
 
     private static void testBackupStoreDoesNotOverwrite() throws Exception {

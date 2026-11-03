@@ -73,8 +73,8 @@ public final class AutomationActivity extends Activity {
         }));
         sleepRow = addRow(root, "Sleep timer", v -> cycle("sleep", SLEEP_VALUES.length, index -> {
             int minutes = SLEEP_VALUES[index];
-            prefs.edit().putInt("sleep_minutes", minutes).apply();
             SleepTimer.set(this, minutes);
+            prefs.edit().putInt("sleep_minutes", minutes).apply();
             refresh();
         }));
 
@@ -124,11 +124,15 @@ public final class AutomationActivity extends Activity {
         return REMOTE_NAMES[0];
     }
 
-    private void cycle(String key, int count, Action action) {
-        int index = prefs.getInt("cycle_" + key, 0);
-        index = (index + 1) % count;
-        prefs.edit().putInt("cycle_" + key, index).apply();
-        action.run(index);
+    private void cycle(String key, int count, AutomationSelection.Action action) {
+        try {
+            int index = AutomationSelection.cycle(
+                    prefs.getInt("cycle_" + key, 0), count, action);
+            prefs.edit().putInt("cycle_" + key, index).apply();
+        } catch (Exception error) {
+            refresh();
+            status.setText("Setting unavailable: " + Errors.describe(error));
+        }
     }
 
     private void refresh() {
@@ -150,9 +154,5 @@ public final class AutomationActivity extends Activity {
 
     private void toast(String message) {
         Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
-    }
-
-    private interface Action {
-        void run(int index);
     }
 }

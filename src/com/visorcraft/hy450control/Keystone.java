@@ -5,7 +5,9 @@ import java.util.Arrays;
 
 /** Live keystone insets. Order is ltx, lty, rtx, rty, lbx, lby, rbx, rby. */
 final class Keystone {
-    private static final String[] DISPLAY = {
+    static final String ZOOM_H = "persist.display.keystone_zoom_h";
+    static final String ZOOM_V = "persist.display.keystone_zoom_v";
+    static final String[] DISPLAY = {
         "persist.display.keystone_ltx", "persist.display.keystone_lty",
         "persist.display.keystone_rtx", "persist.display.keystone_rty",
         "persist.display.keystone_lbx", "persist.display.keystone_lby",
@@ -54,8 +56,8 @@ final class Keystone {
         for (int i = 0; i < DISPLAY.length; i++) {
             inset[i] = parseSnapshotInset(reader.get(DISPLAY[i]));
         }
-        float zoomH = parseSnapshotFloat(reader.get("persist.display.keystone_zoom_h"));
-        float zoomV = parseSnapshotFloat(reader.get("persist.display.keystone_zoom_v"));
+        float zoomH = parseSnapshotFloat(reader.get(ZOOM_H));
+        float zoomV = parseSnapshotFloat(reader.get(ZOOM_V));
         return new Snapshot(inset, zoomH, zoomV);
     }
 
@@ -136,15 +138,6 @@ final class Keystone {
         if (dot >= 0) raw = raw.substring(0, dot);
         try {
             return Integer.parseInt(raw.trim());
-        } catch (NumberFormatException error) {
-            return fallback;
-        }
-    }
-
-    private static float parseFloat(String raw, float fallback) {
-        if (raw == null || raw.length() == 0) return fallback;
-        try {
-            return Float.parseFloat(raw.trim());
         } catch (NumberFormatException error) {
             return fallback;
         }

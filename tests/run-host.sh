@@ -8,12 +8,15 @@ CLASSES="$OUT/classes"
 rm -rf "$OUT"
 mkdir -p "$CLASSES"
 javac -source 8 -target 8 -cp "$PLATFORM" -d "$CLASSES" \
+  src/com/visorcraft/hy450control/AutomationSelection.java \
   src/com/visorcraft/hy450control/Control.java \
   src/com/visorcraft/hy450control/ControlAdapter.java \
   src/com/visorcraft/hy450control/ControlBatch.java \
   src/com/visorcraft/hy450control/Errors.java \
   src/com/visorcraft/hy450control/JsonFileStore.java \
   src/com/visorcraft/hy450control/Keystone.java \
+  src/com/visorcraft/hy450control/OemRecovery.java \
+  src/com/visorcraft/hy450control/ProjectionBackup.java \
   src/com/visorcraft/hy450control/ReadOnlyControl.java \
   src/com/visorcraft/hy450control/Vendor.java \
   src/com/visorcraft/hy450control/VendorControl.java \

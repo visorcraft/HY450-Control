@@ -131,10 +131,6 @@ public final class Ui {
         return button;
     }
 
-    public static Button tile(Context context, CharSequence title) {
-        return tile(context, title, null);
-    }
-
     public static Button tile(Context context, CharSequence title, CharSequence subtitle) {
         Button button = new Button(context);
         button.setAllCaps(false);

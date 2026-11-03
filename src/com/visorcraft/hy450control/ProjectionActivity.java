@@ -36,7 +36,7 @@ public final class ProjectionActivity extends Activity {
             toast("Projection backup saved");
         }), GAP_PX);
         Ui.addChip(backup, "Restore projection backup", v -> run(() -> {
-            ProjectionBackup.restore(this);
+            OemFocus.cancelAndRun(this, () -> ProjectionBackup.restore(this));
             toast("Projection backup restored");
         }), GAP_PX);
         LinearLayout shaping = Ui.chipRow(root, GAP_PX);
@@ -87,7 +87,7 @@ public final class ProjectionActivity extends Activity {
         try {
             startActivity(new Intent().setComponent(new ComponentName(pkg, activity)));
         } catch (Exception error) {
-            toast(error.getMessage());
+            toast(Errors.describe(error));
         }
     }
 
@@ -95,7 +95,7 @@ public final class ProjectionActivity extends Activity {
         try {
             action.run();
         } catch (Exception error) {
-            toast(error.getMessage());
+            toast(Errors.describe(error));
         }
     }
 

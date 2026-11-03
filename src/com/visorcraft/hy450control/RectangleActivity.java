@@ -19,7 +19,7 @@ public final class RectangleActivity extends Activity {
             Log.i("Rectangle", text.toString());
             Toast.makeText(this, "Image squared", Toast.LENGTH_SHORT).show();
         } catch (Exception error) {
-            String message = error.getMessage() == null ? "Square the image failed" : error.getMessage();
+            String message = Errors.describe(error);
             Log.e("Rectangle", message, error);
             Toast.makeText(this, message, Toast.LENGTH_LONG).show();
         }

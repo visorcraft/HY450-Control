@@ -11,8 +11,13 @@ rm -rf "$OUT"
 mkdir -p "$OUT/classes" "$OUT/dex"
 javac -source 8 -target 8 -cp "$PLATFORM" -d "$OUT/classes" \
   src/com/visorcraft/hy450control/BackupStore.java \
+  src/com/visorcraft/hy450control/BootLaunchService.java \
+  src/com/visorcraft/hy450control/BootReceiver.java \
+  src/com/visorcraft/hy450control/Errors.java \
   src/com/visorcraft/hy450control/JsonFileStore.java \
-  src/com/visorcraft/hy450control/ProjectionBackup.java tests/DeviceTests.java
+  src/com/visorcraft/hy450control/Keystone.java \
+  src/com/visorcraft/hy450control/ProjectionBackup.java \
+  src/com/visorcraft/hy450control/Vendor.java tests/DeviceTests.java
 "$BT/d8" --min-api 34 --output "$OUT/dex" "$OUT/classes"/com/visorcraft/hy450control/*.class
 cleanup() {
   adb -s "$SERIAL" shell rm -rf "$REMOTE" >/dev/null 2>&1 || true

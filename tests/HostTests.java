@@ -92,6 +92,25 @@ public final class HostTests {
         }
         check(immutable, "failure details must be immutable");
 
+        Exception cause = new IllegalArgumentException("Vendor rejected value");
+        Exception wrapped = new java.lang.reflect.InvocationTargetException(cause);
+        check("Vendor rejected value".equals(Errors.describe(wrapped)),
+                "reflective cause must be visible");
+        Exception nested = new java.lang.reflect.InvocationTargetException(wrapped);
+        check("Vendor rejected value".equals(Errors.describe(nested)),
+                "nested reflective cause must be visible");
+        Exception linkage = new java.lang.reflect.InvocationTargetException(
+                new NoSuchMethodError("missingVendorMethod"));
+        check("missingVendorMethod".equals(Errors.describe(linkage)),
+                "reflective linkage error must be visible");
+        check("IllegalStateException".equals(Errors.describe(new IllegalStateException())),
+                "null message must use class name");
+        check("IllegalStateException".equals(Errors.describe(new IllegalStateException("  "))),
+                "blank message must use class name");
+
+        testOemRecovery();
+        testProjectionValidation();
+        testAutomationSelection();
         testVendorAdapters();
 
         Map<String, String> valid = validValues();
@@ -177,15 +196,6 @@ public final class HostTests {
         } finally {
             deleteRecursively(directory);
         }
-
-        String projectionActivity = new String(java.nio.file.Files.readAllBytes(
-                java.nio.file.Paths.get("src/com/visorcraft/hy450control/ProjectionActivity.java")),
-                java.nio.charset.StandardCharsets.UTF_8);
-        check(projectionActivity.contains("Ui.addChip(oem, \"OEM manual keystone\", v -> run(() -> {\n"
-                        + "            OemFocus.cancelRestore(this);\n"
-                        + "            component(\"com.hysd.vafocus\", \"com.hysd.vafocus.TchjzActivity\");\n"
-                        + "        }), GAP_PX);"),
-                "manual-keystone cancellation and launch must use the guarded action path");
 
         System.out.println("Host tests passed");
     }
@@ -453,6 +463,231 @@ public final class HostTests {
             if (mismatch && setCalls == 1) return;
             if (rollbackFailure && setCalls == 2) throw new Exception("rollback failure");
             this.value = value;
+        }
+    }
+
+    private static void testAutomationSelection() throws Exception {
+        int[] selected = {-1};
+        int[] attempted = {-1};
+        try {
+            selected[0] = AutomationSelection.cycle(0, 3, index -> {
+                attempted[0] = index;
+                throw new SecurityException("Exact alarms denied");
+            });
+        } catch (SecurityException expected) {
+            // The failed action must not produce a committed selection.
+        }
+        check(attempted[0] == 1, "selection must attempt the next index");
+        check(selected[0] == -1, "failed action must not return a committed selection");
+        selected[0] = AutomationSelection.cycle(0, 3, index -> { });
+        check(selected[0] == 1, "successful selection returns the next index");
+        selected[0] = AutomationSelection.cycle(2, 3, index -> { });
+        check(selected[0] == 0, "selection must wrap after success");
+    }
+
+    private static void testProjectionValidation() throws Exception {
+        Object jsonNull = new Object();
+        ProjectionBackup.validateEntry("global:GsInitXYZ", jsonNull, jsonNull);
+        ProjectionBackup.validateEntry("global:JbCamX", "", jsonNull);
+        ProjectionBackup.validateEntry("property:persist.display.keystone_ltx", "12.5", jsonNull);
+        expectThrows(() -> ProjectionBackup.validateEntry("global:Unknown", "1", jsonNull),
+                "unknown global must be rejected");
+        expectThrows(() -> ProjectionBackup.validateEntry(
+                "property:persist.display.unknown", "1", jsonNull),
+                "unknown property must be rejected");
+        expectThrows(() -> ProjectionBackup.validateEntry("malformed", "1", jsonNull),
+                "malformed key must be rejected");
+        expectThrows(() -> ProjectionBackup.validateEntry("global:JbCamX", 1, jsonNull),
+                "numeric global must be rejected");
+        expectThrows(() -> ProjectionBackup.validateEntry(
+                "property:persist.display.keystone_ltx", 12, jsonNull),
+                "numeric property must be rejected");
+        expectThrows(() -> ProjectionBackup.validateEntry(
+                "property:persist.display.keystone_ltx", jsonNull, jsonNull),
+                "null property must be rejected");
+    }
+
+    private static void testOemRecovery() throws Exception {
+        FakeRecoveryStore store = new FakeRecoveryStore();
+        FakeRecoveryValues values = new FakeRecoveryValues();
+        OemRecovery preparation = new OemRecovery(
+                store, new FakeRecoveryScheduler(), values);
+        preparation.prepare();
+        check(store.pending, "prepare must persist a pending snapshot");
+
+        FakeRecoveryScheduler scheduler = new FakeRecoveryScheduler();
+        OemRecovery recovery = new OemRecovery(store, scheduler, values);
+        List<Exception> errors = new java.util.ArrayList<>();
+        recovery.resume(errors::add);
+        check(scheduler.count() == 3, "resume must schedule three passes");
+        check(scheduler.delays.get(0) == 0L && scheduler.delays.get(1) == 400L
+                && scheduler.delays.get(2) == 1200L, "recovery delays must be preserved");
+        scheduler.run(0);
+        scheduler.run(1);
+        scheduler.run(2);
+        check(values.applied == 3, "all recovery passes must apply");
+        check(!store.pending && store.clears == 2, "verified recovery must clear pending");
+        check(errors.isEmpty(), "successful recovery must not report errors");
+
+        store = new FakeRecoveryStore();
+        values = new FakeRecoveryValues();
+        preparation = new OemRecovery(store, new FakeRecoveryScheduler(), values);
+        preparation.prepare();
+        values.mismatch = true;
+        scheduler = new FakeRecoveryScheduler();
+        recovery = new OemRecovery(store, scheduler, values);
+        errors = new java.util.ArrayList<>();
+        recovery.resume(errors::add);
+        scheduler.run(0);
+        scheduler.run(1);
+        scheduler.run(2);
+        check(store.pending && store.clears == 1,
+                "failed final readback must retain pending recovery");
+        check(errors.size() == 1, "failed final readback must be reported");
+
+        store = new FakeRecoveryStore();
+        values = new FakeRecoveryValues();
+        preparation = new OemRecovery(store, new FakeRecoveryScheduler(), values);
+        preparation.prepare();
+        store.failClear = true;
+        scheduler = new FakeRecoveryScheduler();
+        recovery = new OemRecovery(store, scheduler, values);
+        errors = new java.util.ArrayList<>();
+        recovery.resume(errors::add);
+        scheduler.run(0);
+        scheduler.run(1);
+        scheduler.run(2);
+        check(store.pending && store.saves == 2,
+                "failed clear must re-save the pending snapshot");
+        check(errors.size() == 1, "failed clear must be reported");
+
+        store = new FakeRecoveryStore();
+        values = new FakeRecoveryValues();
+        scheduler = new FakeRecoveryScheduler();
+        recovery = new OemRecovery(store, scheduler, values);
+        recovery.prepare();
+        recovery.resume(errors::add);
+        recovery.cancel();
+        check(scheduler.count() == 0, "cancel must remove every queued callback");
+        check(!store.pending, "cancel must clear persisted recovery");
+
+        store = new FakeRecoveryStore();
+        store.pending = true;
+        store.readFailure = true;
+        scheduler = new FakeRecoveryScheduler();
+        recovery = new OemRecovery(store, scheduler, values);
+        errors = new java.util.ArrayList<>();
+        recovery.resume(errors::add);
+        check(errors.size() == 1 && scheduler.count() == 0,
+                "malformed persisted state must report without scheduling");
+
+        store = new FakeRecoveryStore();
+        store.failSave = true;
+        recovery = new OemRecovery(store, new FakeRecoveryScheduler(), values);
+        expectThrows(recovery::prepare, "prepare commit failure must throw");
+
+        store = new FakeRecoveryStore();
+        store.failClear = true;
+        recovery = new OemRecovery(store, new FakeRecoveryScheduler(), values);
+        expectThrows(recovery::cancel, "cancel commit failure must throw");
+        boolean[] restored = {false};
+        OemRecovery failingRecovery = recovery;
+        expectThrows(() -> OemRecovery.cancelAndRun(failingRecovery,
+                () -> restored[0] = true), "failed cancellation must stop restore");
+        check(!restored[0], "failed cancellation must prevent a newer restore");
+
+        store = new FakeRecoveryStore();
+        recovery = new OemRecovery(store, new FakeRecoveryScheduler(), values);
+        OemRecovery.cancelAndRun(recovery, () -> restored[0] = true);
+        check(restored[0], "successful cancellation must allow a newer restore");
+    }
+
+    private static Keystone.Snapshot recoverySnapshot(int offset) {
+        int[] inset = new int[8];
+        for (int i = 0; i < inset.length; i++) inset[i] = i + offset;
+        return new Keystone.Snapshot(inset, 100f, 95.5f);
+    }
+
+    private static final class FakeRecoveryStore implements OemRecovery.Store {
+        Keystone.Snapshot saved = recoverySnapshot(0);
+        boolean pending;
+        boolean readFailure;
+        boolean failSave;
+        boolean failClear;
+        int saves;
+        int clears;
+
+        @Override
+        public boolean isPending() { return pending; }
+
+        @Override
+        public Keystone.Snapshot read() throws Exception {
+            if (readFailure) throw new Exception("Malformed saved keystone");
+            return saved;
+        }
+
+        @Override
+        public boolean save(Keystone.Snapshot snapshot) {
+            saves++;
+            if (failSave) return false;
+            saved = snapshot;
+            pending = true;
+            return true;
+        }
+
+        @Override
+        public boolean clear() {
+            clears++;
+            if (failClear) return false;
+            pending = false;
+            return true;
+        }
+    }
+
+    private static final class FakeRecoveryScheduler implements OemRecovery.Scheduler {
+        final List<Runnable> callbacks = new java.util.ArrayList<>();
+        final List<Long> delays = new java.util.ArrayList<>();
+
+        @Override
+        public void post(Runnable runnable) {
+            callbacks.add(runnable);
+            delays.add(0L);
+        }
+
+        @Override
+        public void postDelayed(Runnable runnable, long delayMillis) {
+            callbacks.add(runnable);
+            delays.add(delayMillis);
+        }
+
+        @Override
+        public void removeCallbacks(Runnable runnable) {
+            for (int i = callbacks.size() - 1; i >= 0; i--) {
+                if (callbacks.get(i) == runnable) {
+                    callbacks.remove(i);
+                    delays.remove(i);
+                }
+            }
+        }
+
+        int count() { return callbacks.size(); }
+        void run(int index) { callbacks.get(index).run(); }
+    }
+
+    private static final class FakeRecoveryValues implements OemRecovery.Values {
+        Keystone.Snapshot current = recoverySnapshot(0);
+        boolean mismatch;
+        int applied;
+
+        @Override
+        public Keystone.Snapshot read() {
+            return mismatch ? recoverySnapshot(99) : current;
+        }
+
+        @Override
+        public void apply(Keystone.Snapshot snapshot) {
+            current = snapshot;
+            applied++;
         }
     }
 
