@@ -122,7 +122,11 @@ adb connect <projector-ip>:5555
 
 The device suite renders all four ambient scenes and uses temporary private
 paths, fake value access, and a fake job scheduler; it does not write live
-projection settings or schedule real jobs.
+projection settings or schedule real jobs. Owner Assistant coverage includes
+atomic routine/safety stores, confirmation boundaries, portable validation and
+zero-write rejection, diagnostic allowlisting, and process-recreated state. The
+host suite also covers picture-mode ordering and final whole-batch readback for
+linked firmware controls.
 
 ### Install
 
@@ -162,14 +166,16 @@ partition, remove another module, or reset the projector.
 - **Family presets** - save and reapply picture, audio, and input settings while skipping read-only controls and missing entries. Application continues after individual failures and reports applied/failed counts with capped per-control errors; success requires zero failures.
 - **Automation** - choose an app to launch after boot and set a sleep timer. Boot launch uses Android's job scheduler so the delayed work survives receiver completion; sleep selections are saved only after the alarm is scheduled successfully. Both are opt-in and can be switched off. Accessibility configuration uses Android's system settings instead of rewriting the enabled-service list.
 - **Playground** - manual fullscreen Breakout with 60 bricks, three lives, scoring, and a persistent best score, plus Starfield, Aurora, Fireplace, and Ocean waves. LEFT/RIGHT moves the paddle or changes scenes; CENTRE launches, pauses, or retries; BACK returns to the menu. Everything renders locally with Canvas and no assets, network access, or hardware-setting changes; animation pauses in the background.
+- **Owner Assistant** - an explicit read-only setup scan across picture, audio, and input; Movie, Day, Night, and Custom routines with pre-apply undo that survives process death; and portable backup/recovery through user-selected documents. Imports are previewed in memory and fully validated before writes, firmware mismatches cannot be restored, and every confirmed restore saves a fresh pre-restore safety copy. A separate diagnostic export contains only the allowlisted compatibility report.
 
 ## Safety model
 
 - Vendor values are read through the projector's own Allwinner APIs.
 - UI-generated numeric and enum adjustments clamp at their supported limits; snapshot and preset writes retain adapter range validation.
-- Controls read back their values, roll back mismatches where supported, and surface failures instead of hiding them.
+- Controls read back their values, roll back mismatches where supported, and surface failures instead of hiding them. Routine and portable batches also verify final whole-family state so a later linked write cannot silently undo an earlier one.
 - Original-value snapshots are firmware-bound and never overwritten; restore validates the snapshot before attempting independent control writes.
-- Backup and preset data stays in the app's private storage.
+- Portable documents are capped at 1 MiB and restricted to known control/projection IDs, integer values within adapter domains, schema 1, and the exact firmware fingerprint. Restore saves a new safety copy before writing and never rolls back automatically.
+- Internal backup and preset data stays in the app's private storage. Portable backups and diagnostics are written only to documents selected by the user; diagnostics exclude serial/IP/MAC addresses, accounts, package inventories, logs, arbitrary properties, and network data.
 - Installation is a reversible Magisk overlay, not a raw partition write.
 - There is no arbitrary root-command interface and no DRM circumvention.
 
@@ -184,6 +190,13 @@ partition, remove another module, or reset the projector.
 - **Input preset application can fail on this firmware.** Saving succeeds, but
   the reported current-input value can be outside the writable adapter range,
   causing `Out of range`; the original-input snapshot remains restorable.
+- **Audio mode and EQ restoration are partial on the verified firmware.** The
+  audio-mode setter and all seven EQ-band setters reject writes; routines and
+  portable recovery report these failures instead of claiming full audio success.
+- **Some imported picture combinations are not attainable.** Picture-mode writes
+  reset backlight/basic values, and backlight/colour-temperature writes change
+  picture mode. Picture mode is applied last and final whole-family readback
+  reports any remaining conflict rather than silently returning success.
 - **Process death removes the app's activity stack.** If BACK from OEM focus
   returns to another app after HY450 Control was killed, reopen HY450 Control
   to run the durable pending recovery; the marker remains until that resume.
@@ -239,6 +252,21 @@ temperature, gamma, and dynamic-backlight values.
 ---
 
 ## Verified on hardware
+
+The 1.6.0/versionCode 12 Owner Assistant candidate was installed through the
+reversible Magisk module and verified at 1920×1080. The locally signed candidate
+APK SHA-256 is `09cccfdade9ccc48bf3f4320f71a7ed95c9915d569592c09cfe49a808f2ed3f8`.
+This is a verified source candidate, not a published GitHub release.
+
+The 1.6.0 checks included:
+
+- Explicit setup scan of 33 controls (29 readable, 32 writable, four unavailable), with all 27 captured family values and 15 projection values unchanged afterward.
+- Movie, Day, Night, and Custom routine save/apply/undo using an attainable custom-mode/brightness change. Picture state returned exactly on every apply and undo; the pre-apply undo document was byte-identical and usable after force-stop/recreation.
+- Portable export, import, SAF cancellation, malformed and firmware-mismatched imports with Restore disabled and zero live changes, fresh pre-restore safety capture, and explicit recovery without overwriting the safety document. Final export matched every original family/projection value.
+- A real schema-1 diagnostic export with 33 controls and only the allowlisted metadata/control fields.
+- D-pad navigation and usable Owner Assistant, routine, and recovery actions at 100% and 130% font scale, followed by restoration to 100%.
+- Hardware tracing exposed linked picture-mode/backlight/colour-temperature side effects. Picture mode is now deferred and final whole-family readback rejects conflicting outcomes; regression and device suites passed after the fix. The eight unsupported audio-mode/EQ writes remained visible failures.
+- Projectivy home/startup/accessibility, sleep-off state, the 12-package disabled set, the framework patch, and the complete original projection baseline remained intact. Temporary test state and documents were removed without resetting unrelated app data.
 
 The v1.5.1/versionCode 11 candidate was installed through the reversible Magisk
 module and verified at 1920×1080. The locally signed candidate APK SHA-256 is

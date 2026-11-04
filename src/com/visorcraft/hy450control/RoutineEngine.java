@@ -114,7 +114,17 @@ public final class RoutineEngine {
                     return values.get(prefix + id);
                 }
             };
-            ControlBatch.Result result = ControlBatch.apply(controls, familyValues);
+            List<Control> ordered = controls;
+            if ("picture".equals(family)) {
+                ordered = new ArrayList<>();
+                Control pictureMode = null;
+                for (Control control : controls) {
+                    if ("display.pictureMode".equals(control.id)) pictureMode = control;
+                    else ordered.add(control);
+                }
+                if (pictureMode != null) ordered.add(pictureMode);
+            }
+            ControlBatch.Result result = ControlBatch.apply(ordered, familyValues);
             applied += result.applied;
             failures.addAll(result.failures);
         }

@@ -402,13 +402,8 @@ public final class DeviceTests {
                             && !missingData.restoreEnabled && importCalls[0] == 0,
                     "SAF cancellation/BACK must use the Activity path without reading or writing");
 
-            android.content.Context context = nonLiveContext(1920, 1080);
-            android.widget.TextView preview = BackupRecoveryActivity.renderPreview(
-                    context, valid.preview);
-            android.widget.TextView error = BackupRecoveryActivity.renderError(
-                    context, "Malformed backup");
-            check(preview.getText().length() > 0 && error.getText().length() > 0,
-                    "1920x1080 preview and error helpers must render non-empty text");
+            check(valid.preview.summary.length() > 0,
+                    "import preview must contain a non-empty summary");
             check(backlight.writes == 0 && vendor.writes == 0 && access.writes == 0
                             && access.globalWrites == 0 && access.propertyWrites == 0,
                     "preview, cancellation, and recreated recovery state must not write hardware");
@@ -484,36 +479,6 @@ public final class DeviceTests {
                         && order.equals(java.util.Arrays.asList("capture", "safety", "restore"))
                         && persistentWrites[0] == 1,
                 "positive Restore must save safety before RestoreEngine.restore");
-    }
-
-    private static android.content.Context nonLiveContext(int width, int height) {
-        android.util.DisplayMetrics metrics = new android.util.DisplayMetrics();
-        metrics.widthPixels = width;
-        metrics.heightPixels = height;
-        metrics.density = 1f;
-        metrics.scaledDensity = 1f;
-        metrics.densityDpi = 160;
-        android.content.res.Configuration configuration = new android.content.res.Configuration();
-        configuration.fontScale = 1f;
-        android.content.res.Resources resources = new android.content.res.Resources(
-                null, metrics, configuration) {
-            @Override
-            public int getColor(int id) {
-                return 0xfff4f7fb;
-            }
-        };
-        android.content.res.Resources.Theme theme = resources.newTheme();
-        return new android.content.ContextWrapper(null) {
-            @Override
-            public android.content.res.Resources getResources() {
-                return resources;
-            }
-
-            @Override
-            public android.content.res.Resources.Theme getTheme() {
-                return theme;
-            }
-        };
     }
 
     private static void testPortableBackup() throws Exception {

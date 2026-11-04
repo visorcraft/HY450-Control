@@ -410,6 +410,77 @@ public final class HostTests {
                         && ordered.failures.get(1).startsWith("Audio: ")
                         && ordered.failures.get(2).startsWith("Source: "),
                 "routine families must apply in fixed order");
+
+        class LinkedAdapter implements ControlAdapter {
+            private final String title;
+            private final java.util.function.IntSupplier getter;
+            private final java.util.function.IntConsumer setter;
+            private final List<String> order;
+
+            LinkedAdapter(String title, java.util.function.IntSupplier getter,
+                    java.util.function.IntConsumer setter, List<String> order) {
+                this.title = title;
+                this.getter = getter;
+                this.setter = setter;
+                this.order = order;
+            }
+
+            @Override
+            public int read() {
+                return getter.getAsInt();
+            }
+
+            @Override
+            public void write(int value) {
+                order.add(title);
+                setter.accept(value);
+            }
+
+            @Override
+            public int min() { return 0; }
+
+            @Override
+            public int max() { return 255; }
+        }
+
+        int[] linkedMode = {21};
+        int[] linkedLamp = {100};
+        int[] linkedTemperature = {0};
+        List<String> linkedOrder = new java.util.ArrayList<>();
+        Map<String, List<Control>> linkedFamilies = new java.util.LinkedHashMap<>();
+        linkedFamilies.put("picture", Arrays.asList(
+                new Control("display.backlight", "Backlight", new LinkedAdapter("Backlight",
+                        () -> linkedLamp[0], value -> {
+                            linkedLamp[0] = value;
+                            linkedMode[0] = 21;
+                        }, linkedOrder)),
+                new Control("display.pictureMode", "Picture mode", new LinkedAdapter("Picture mode",
+                        () -> linkedMode[0], value -> {
+                            linkedMode[0] = value;
+                            linkedLamp[0] = 100;
+                        }, linkedOrder)),
+                new Control("display.colorTemp", "Colour temperature", new LinkedAdapter(
+                        "Colour temperature", () -> linkedTemperature[0], value -> {
+                            linkedTemperature[0] = value;
+                            linkedMode[0] = 21;
+                        }, linkedOrder))));
+        Map<String, Integer> linkedValues = new HashMap<>();
+        linkedValues.put("picture:display.backlight", 100);
+        linkedValues.put("picture:display.pictureMode", 5);
+        linkedValues.put("picture:display.colorTemp", 0);
+        RoutineEngine.Result linked = RoutineEngine.apply(linkedFamilies, linkedValues);
+        check(linkedOrder.equals(Arrays.asList("Backlight", "Colour temperature", "Picture mode"))
+                        && linkedMode[0] == 5 && linkedLamp[0] == 100
+                        && linked.applied == 3 && linked.failures.isEmpty(),
+                "picture mode must apply last and preserve a valid captured state");
+
+        linkedOrder.clear();
+        linkedValues.put("picture:display.backlight", 99);
+        RoutineEngine.Result conflicting = RoutineEngine.apply(linkedFamilies, linkedValues);
+        check(conflicting.applied == 2 && conflicting.failures.size() == 1
+                        && conflicting.failures.get(0).contains("Backlight")
+                        && conflicting.failures.get(0).contains("Final readback"),
+                "final batch readback must report cross-control restore conflicts");
     }
 
     private static void testCapabilityReport() {

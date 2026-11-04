@@ -25,13 +25,33 @@ public final class ControlBatch {
     public static Result apply(List<Control> controls, Values values) {
         int applied = 0;
         List<String> failures = new ArrayList<>();
+        List<Control> written = new ArrayList<>();
+        List<Integer> expected = new ArrayList<>();
         for (Control control : controls) {
             if (!control.adapter.isWritable() || !values.has(control.id)) continue;
             try {
-                control.adapter.write(values.getInt(control.id));
+                int value = values.getInt(control.id);
+                control.adapter.write(value);
                 applied++;
+                written.add(control);
+                expected.add(value);
             } catch (Exception error) {
                 failures.add(control.title + ": " + Errors.describe(error));
+            }
+        }
+        for (int i = 0; i < written.size(); i++) {
+            Control control = written.get(i);
+            int value = expected.get(i);
+            try {
+                int actual = control.adapter.read();
+                if (actual != value) {
+                    applied--;
+                    failures.add(control.title + ": Final readback expected " + value
+                            + " but got " + actual);
+                }
+            } catch (Exception error) {
+                applied--;
+                failures.add(control.title + ": Final readback: " + Errors.describe(error));
             }
         }
         return new Result(applied, failures);
