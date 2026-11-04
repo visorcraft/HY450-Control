@@ -139,6 +139,7 @@ public final class DeviceTests {
         testRoutineStore();
         testOwnerBackupStore();
         testRestoreEngine();
+        testRoutineBatchLinkedControls();
         testOwnerAssistantUiState();
         testOwnerAssistantControllers();
         System.out.println("Device tests passed");
@@ -333,6 +334,100 @@ public final class DeviceTests {
             check(adapter.writes == 0, message + " must not write families");
         }
         check(projectionCalls[0] == 0, message + " must not write projection");
+    }
+
+    private static void testRoutineBatchLinkedControls() throws Exception {
+        class LinkedAdapter implements ControlAdapter {
+            private final String title;
+            private final java.util.function.IntSupplier getter;
+            private final java.util.function.IntConsumer setter;
+            private final java.util.List<String> order;
+
+            LinkedAdapter(String title, java.util.function.IntSupplier getter,
+                    java.util.function.IntConsumer setter, java.util.List<String> order) {
+                this.title = title;
+                this.getter = getter;
+                this.setter = setter;
+                this.order = order;
+            }
+
+            @Override
+            public int read() {
+                return getter.getAsInt();
+            }
+
+            @Override
+            public void write(int value) {
+                order.add(title);
+                setter.accept(value);
+            }
+
+            @Override
+            public int min() { return 0; }
+
+            @Override
+            public int max() { return 255; }
+        }
+
+        int[] mode = {21};
+        int[] backlight = {100};
+        int[] temperature = {0};
+        java.util.List<String> order = new java.util.ArrayList<>();
+        Map<String, java.util.List<Control>> families = new java.util.LinkedHashMap<>();
+        families.put("picture", java.util.Arrays.asList(
+                new Control("display.backlight", "Backlight", new LinkedAdapter("Backlight",
+                        () -> backlight[0], value -> {
+                            backlight[0] = value;
+                            mode[0] = 21;
+                        }, order)),
+                new Control("display.pictureMode", "Picture mode", new LinkedAdapter("Picture mode",
+                        () -> mode[0], value -> {
+                            mode[0] = value;
+                            backlight[0] = 100;
+                        }, order)),
+                new Control("display.colorTemp", "Colour temperature", new LinkedAdapter(
+                        "Colour temperature", () -> temperature[0], value -> {
+                            temperature[0] = value;
+                            mode[0] = 21;
+                        }, order))));
+        Map<String, Integer> requested = new HashMap<>();
+        requested.put("picture:display.backlight", 100);
+        requested.put("picture:display.pictureMode", 5);
+        requested.put("picture:display.colorTemp", 0);
+        RoutineEngine.Result linked = RoutineEngine.apply(families, requested);
+        check(order.equals(java.util.Arrays.asList(
+                        "Backlight", "Colour temperature", "Picture mode"))
+                        && mode[0] == 5 && backlight[0] == 100
+                        && linked.applied == 3 && linked.failures.isEmpty(),
+                "Android linked adapters must apply picture mode last");
+
+        order.clear();
+        requested.put("picture:display.backlight", 99);
+        RoutineEngine.Result mismatch = RoutineEngine.apply(families, requested);
+        check(mismatch.applied == 2 && mismatch.failures.size() == 1
+                        && mismatch.failures.get(0).equals(
+                                "Backlight: Final readback expected 99 but got 100"),
+                "Android final mismatch must be visible with corrected counts");
+
+        java.util.List<String> readOrder = new java.util.ArrayList<>();
+        int[] successful = {20};
+        Map<String, java.util.List<Control>> readFamilies = new java.util.LinkedHashMap<>();
+        readFamilies.put("picture", java.util.Arrays.asList(
+                new Control("broken", "Broken read", new LinkedAdapter("Broken read", () -> {
+                    throw new IllegalStateException("final read failed");
+                }, value -> { }, readOrder)),
+                new Control("successful", "Successful", new LinkedAdapter("Successful",
+                        () -> successful[0], value -> successful[0] = value, readOrder))));
+        Map<String, Integer> readValues = new HashMap<>();
+        readValues.put("picture:broken", 11);
+        readValues.put("picture:successful", 21);
+        RoutineEngine.Result readFailure = RoutineEngine.apply(readFamilies, readValues);
+        check(readFailure.applied == 1 && readFailure.failures.size() == 1
+                        && readFailure.failures.get(0).equals(
+                                "Broken read: Final readback: final read failed")
+                        && successful[0] == 21
+                        && readOrder.equals(java.util.Arrays.asList("Broken read", "Successful")),
+                "Android final read failure must decrement only its own write");
     }
 
     private static void testOwnerAssistantUiState() throws Exception {

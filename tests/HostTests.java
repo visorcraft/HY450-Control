@@ -411,6 +411,24 @@ public final class HostTests {
                         && ordered.failures.get(2).startsWith("Source: "),
                 "routine families must apply in fixed order");
 
+        RoutineAdapter finalReadFailure = new RoutineAdapter(10, true,
+                new Exception("final read failed"), null);
+        RoutineAdapter selectiveSuccess = new RoutineAdapter(20, true, null, null);
+        Map<String, List<Control>> readFailureFamilies = new java.util.LinkedHashMap<>();
+        readFailureFamilies.put("picture", Arrays.asList(
+                new Control("broken", "Broken read", finalReadFailure),
+                new Control("successful", "Successful", selectiveSuccess)));
+        Map<String, Integer> readFailureValues = new HashMap<>();
+        readFailureValues.put("picture:broken", 11);
+        readFailureValues.put("picture:successful", 21);
+        RoutineEngine.Result readFailureResult = RoutineEngine.apply(
+                readFailureFamilies, readFailureValues);
+        check(readFailureResult.applied == 1 && readFailureResult.failures.size() == 1
+                        && readFailureResult.failures.get(0).equals(
+                                "Broken read: Final readback: final read failed")
+                        && finalReadFailure.value == 11 && selectiveSuccess.value == 21,
+                "final read failure must decrement only its own successful write");
+
         class LinkedAdapter implements ControlAdapter {
             private final String title;
             private final java.util.function.IntSupplier getter;
