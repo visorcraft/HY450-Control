@@ -263,6 +263,8 @@ public final class HostTests {
         BoundedDocument.write(output, roundTrip);
         check(Arrays.equals(maximum, output.toByteArray()), "document write must write all bytes");
         check(output.flushed && !output.closed, "document write must flush without closing");
+        check("wt".equals(BoundedDocument.EXPORT_MODE),
+                "SAF exports must truncate provider documents");
     }
 
     private static void testRoutineEngine() throws Exception {
@@ -307,17 +309,26 @@ public final class HostTests {
         RoutineAdapter outsideAdapter = new RoutineAdapter(105, true, null, null);
         RoutineAdapter brokenAdapter = new RoutineAdapter(0, true,
                 new Exception("read failed"), null);
+        RoutineAdapter captureReadOnly = new RoutineAdapter(40, false, null, null);
+        RoutineAdapter longReadOnly = new RoutineAdapter(50, false, null, null);
+        String longTitle = new String(new char[180]).replace('\0', 'x');
         Map<String, List<Control>> captureFamilies = new java.util.LinkedHashMap<>();
         captureFamilies.put("picture", Arrays.asList(
                 new Control("first", "First", firstAdapter),
                 new Control("outside", "Outside", outsideAdapter),
-                new Control("second", "Second", brokenAdapter)));
+                new Control("second", "Second", brokenAdapter),
+                new Control("read-only", "Read only", captureReadOnly),
+                new Control("long-read-only", longTitle, longReadOnly)));
         RoutineEngine.Capture capture = RoutineEngine.capture(captureFamilies);
         check(capture.values.get("picture:first") == 10, "valid routine value");
         check(!capture.values.containsKey("picture:outside"),
                 "out-of-range capture must be omitted");
-        check(capture.values.size() == 1 && capture.warnings.size() == 2,
+        check(capture.values.size() == 1 && capture.warnings.size() == 4,
                 "capture omissions must be visible without clamping");
+        check("Read only: unavailable (read-only)".equals(capture.warnings.get(2))
+                        && capture.warnings.get(3).length() <= 160
+                        && captureReadOnly.writeCalls == 0 && longReadOnly.writeCalls == 0,
+                "every non-writable control must warn once with bounded text and zero writes");
 
         boolean immutableValues = false;
         try {

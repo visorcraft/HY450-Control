@@ -73,24 +73,57 @@ public final class BackupRecoveryActivity extends Activity {
         RestoreEngine.Result restore(JSONObject document) throws Exception;
     }
 
+    interface SafetyPreview {
+        PortableBackup.Preview preview(JSONObject safety) throws Exception;
+    }
+
+    static final class RestorePreparation {
+        final JSONObject document;
+        final JSONObject safety;
+        final String confirmation;
+
+        RestorePreparation(JSONObject document, JSONObject safety, String confirmation) {
+            this.document = document;
+            this.safety = safety;
+            this.confirmation = confirmation;
+        }
+    }
+
     static final class RestoreController {
         private final SafetyCapture safetyCapture;
         private final SafetySaver safetySaver;
         private final RestoreRunner restoreRunner;
+        private final SafetyPreview safetyPreview;
 
         RestoreController(SafetyCapture safetyCapture, SafetySaver safetySaver,
-                RestoreRunner restoreRunner) {
+                RestoreRunner restoreRunner, SafetyPreview safetyPreview) {
             this.safetyCapture = safetyCapture;
             this.safetySaver = safetySaver;
             this.restoreRunner = restoreRunner;
+            this.safetyPreview = safetyPreview;
         }
 
-        RestoreEngine.Result onConfirmation(boolean confirmed, JSONObject document)
+        RestorePreparation prepare(JSONObject document) throws Exception {
+            JSONObject safety = safetyCapture.capture();
+            PortableBackup.Preview preview = safetyPreview.preview(safety);
+            StringBuilder confirmation = new StringBuilder(preview.summary)
+                    .append("\nSafety omissions / warnings: ").append(preview.warnings.size());
+            int shown = Math.min(preview.warnings.size(), MAX_WARNINGS);
+            for (int i = 0; i < shown; i++) {
+                confirmation.append("\n• ").append(preview.warnings.get(i));
+            }
+            if (preview.warnings.size() > shown) {
+                confirmation.append("\n...and ").append(preview.warnings.size() - shown)
+                        .append(" more");
+            }
+            return new RestorePreparation(document, safety, confirmation.toString());
+        }
+
+        RestoreEngine.Result onConfirmation(boolean confirmed, RestorePreparation prepared)
                 throws Exception {
             if (!confirmed) return null;
-            JSONObject safety = safetyCapture.capture();
-            safetySaver.save(safety);
-            return restoreRunner.restore(document);
+            safetySaver.save(prepared.safety);
+            return restoreRunner.restore(prepared.document);
         }
     }
 
@@ -114,7 +147,7 @@ public final class BackupRecoveryActivity extends Activity {
         if (root == null) return cancelledImport();
         PortableBackup.Preview preview = null;
         try {
-            preview = PortableBackup.preview(root, fingerprint);
+            preview = PortableBackup.preview(root, families, fingerprint);
             if (preview.firmwareMatches) PortableBackup.validate(root, families, fingerprint);
             return new ImportState(root, preview, null, preview.firmwareMatches);
         } catch (Exception failure) {
@@ -238,7 +271,8 @@ public final class BackupRecoveryActivity extends Activity {
     }
 
     private void writeExport(Uri target, JSONObject document) {
-        try (OutputStream output = getContentResolver().openOutputStream(target)) {
+        try (OutputStream output = getContentResolver().openOutputStream(
+                target, BoundedDocument.EXPORT_MODE)) {
             if (output == null) throw new IllegalStateException("Document stream unavailable");
             BoundedDocument.write(output, document.toString(2).getBytes(StandardCharsets.UTF_8));
             status.setText("Fresh backup exported");
@@ -259,21 +293,29 @@ public final class BackupRecoveryActivity extends Activity {
     private void confirmImportedRestore() {
         if (!imported.restoreEnabled || imported.root == null) return;
         final RestoreController controller = restoreController();
+        final RestorePreparation prepared;
+        try {
+            prepared = controller.prepare(imported.root);
+        } catch (Exception failure) {
+            showError("Restore preparation failed", failure);
+            return;
+        }
         AlertDialog dialog = new AlertDialog.Builder(this)
                 .setTitle("Restore imported backup?")
                 .setMessage("A fresh pre-restore safety copy is saved before any write.\n"
-                        + previewText(imported.preview))
-                .setNegativeButton("Cancel", (ignored, which) -> cancelRestore(controller))
+                        + previewText(imported.preview) + "\n" + prepared.confirmation)
+                .setNegativeButton("Cancel",
+                        (ignored, which) -> cancelRestore(controller, prepared))
                 .setPositiveButton("Save safety & restore",
-                        (ignored, which) -> restoreImported(controller))
+                        (ignored, which) -> restoreImported(controller, prepared))
                 .create();
-        dialog.setOnCancelListener(ignored -> cancelRestore(controller));
+        dialog.setOnCancelListener(ignored -> cancelRestore(controller, prepared));
         dialog.show();
     }
 
-    private void cancelRestore(RestoreController controller) {
+    private void cancelRestore(RestoreController controller, RestorePreparation prepared) {
         try {
-            controller.onConfirmation(false, imported.root);
+            controller.onConfirmation(false, prepared);
             status.setText("Restore cancelled • no changes made");
         } catch (Exception failure) {
             showError("Restore cancellation failed", failure);
@@ -284,12 +326,13 @@ public final class BackupRecoveryActivity extends Activity {
         return new RestoreController(this::captureBackup, new OwnerBackupStore(this)::saveSafety,
                 document -> RestoreEngine.restore(document, families(), Build.FINGERPRINT,
                         projection -> OemFocus.cancelAndRun(this,
-                                () -> ProjectionBackup.restoreValues(this, projection))));
+                                () -> ProjectionBackup.restoreValues(this, projection))),
+                safety -> PortableBackup.preview(safety, families(), Build.FINGERPRINT));
     }
 
-    private void restoreImported(RestoreController controller) {
+    private void restoreImported(RestoreController controller, RestorePreparation prepared) {
         try {
-            RestoreEngine.Result result = controller.onConfirmation(true, imported.root);
+            RestoreEngine.Result result = controller.onConfirmation(true, prepared);
             showResult("Restore", result);
             refreshRecovery();
         } catch (Exception failure) {
@@ -390,7 +433,9 @@ public final class BackupRecoveryActivity extends Activity {
     private void showResult(String operation, RestoreEngine.Result result) {
         StringBuilder message = new StringBuilder(operation);
         message.append(result.failures.isEmpty() ? " completed successfully • "
-                : " finished with failures • ").append(result.applied).append(" values");
+                : " finished with failures • ").append(result.applied)
+                .append(" values (").append(result.familyApplied).append(" family + ")
+                .append(result.projectionApplied).append(" projection)");
         if (!result.failures.isEmpty()) {
             message.append(" • ").append(result.failures.size()).append(" failed");
             int shown = Math.min(result.failures.size(), MAX_WARNINGS);

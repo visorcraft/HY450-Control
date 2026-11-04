@@ -255,14 +255,15 @@ temperature, gamma, and dynamic-backlight values.
 
 The 1.6.0/versionCode 12 Owner Assistant candidate was installed through the
 reversible Magisk module and verified at 1920×1080. The locally signed candidate
-APK SHA-256 is `09cccfdade9ccc48bf3f4320f71a7ed95c9915d569592c09cfe49a808f2ed3f8`.
+APK SHA-256 is `86a49600b2929693283ac47dbf91d2df53da5617644395ed06502314b8855301`.
 This is a verified source candidate, not a published GitHub release.
 
 The 1.6.0 checks included:
 
-- Explicit setup scan of 33 controls (29 readable, 32 writable, four unavailable), with all 27 captured family values and 15 projection values unchanged afterward.
+- Explicit setup scan of 33 controls (29 readable, 32 writable, one unavailable, four failed), with all 27 captured family values and 15 projection values unchanged afterward.
 - Movie, Day, Night, and Custom routine save/apply/undo using an attainable custom-mode/brightness change. Picture state returned exactly on every apply and undo; the pre-apply undo document was byte-identical and usable after force-stop/recreation.
 - Portable export, import, SAF cancellation, malformed and firmware-mismatched imports with Restore disabled and zero live changes, fresh pre-restore safety capture, and explicit recovery without overwriting the safety document. Final export matched every original family/projection value.
+- Final review regressions and hardware checks covered prepared safety omissions/failure barriers, occupied-slot protection from empty captures, derived preview counts/missing IDs, bounded read-only warnings, independent unavailable/failed counts, projection-only result counts, and truncating a 20,000-byte provider document to valid shorter JSON.
 - A real schema-1 diagnostic export with 33 controls and only the allowlisted metadata/control fields.
 - D-pad navigation and usable Owner Assistant, routine, and recovery actions at 100% and 130% font scale, followed by restoration to 100%.
 - Hardware tracing exposed linked picture-mode/backlight/colour-temperature side effects. Picture mode is now deferred and final whole-family readback rejects conflicting outcomes; regression and device suites passed after the fix. The eight unsupported audio-mode/EQ writes remained visible failures.

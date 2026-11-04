@@ -131,6 +131,7 @@ public final class DeviceTests {
 
         testPortableBackup();
         testDiagnosticAllowlist();
+        testOwnerAssistantScanState();
         testAmbientScenes();
         testBootScheduling();
         testProjectionValidationRejectsBeforeWrites();
@@ -269,8 +270,9 @@ public final class DeviceTests {
                 });
         check(order.equals(java.util.Arrays.asList("picture", "audio", "source", "projection")),
                 "restore order must continue past a family failure");
-        check(result.applied == 2 && result.failures.size() == 1,
-                "partial restore failure must be visible");
+        check(result.applied == 3 && result.familyApplied == 2
+                        && result.projectionApplied == 1 && result.failures.size() == 1,
+                "partial restore must count family and projection values independently");
         check(result.failures.get(0).length() <= 160,
                 "family restore failure must be bounded");
         check(projectionCalls[0] == 1 && picture.writes == 1 && audio.writes == 1
@@ -298,13 +300,28 @@ public final class DeviceTests {
                     projectionCalls[0]++;
                     throw new Exception(longError);
                 });
-        check(projectionFailure.applied == 3 && projectionFailure.failures.size() == 1
+        check(projectionFailure.applied == 3 && projectionFailure.familyApplied == 3
+                        && projectionFailure.projectionApplied == 0
+                        && projectionFailure.failures.size() == 1
                         && projectionFailure.failures.get(0).startsWith("Projection: ")
                         && projectionFailure.failures.get(0).length() <= 160,
                 "projection exception must be reported once with bounded text");
         check(projectionCalls[0] == 1 && picture.writes == 1 && audio.writes == 1
                         && source.writes == 1,
                 "projection failure must not trigger another restore");
+
+        JSONObject projectionOnly = new JSONObject(root.toString());
+        JSONObject noControls = new JSONObject();
+        noControls.put("picture", new JSONObject());
+        noControls.put("audio", new JSONObject());
+        noControls.put("source", new JSONObject());
+        projectionOnly.put("families", noControls);
+        RestoreEngine.Result projectionResult = RestoreEngine.restore(
+                projectionOnly, families, "test-fingerprint", projection -> { });
+        check(projectionResult.applied == 1 && projectionResult.familyApplied == 0
+                        && projectionResult.projectionApplied == 1
+                        && projectionResult.failures.isEmpty(),
+                "projection-only restore must report one applied projection value");
 
         JSONObject malformed = new JSONObject(root.toString());
         malformed.put("extra", true);
@@ -454,6 +471,48 @@ public final class DeviceTests {
             routines.saveSlot("movie", routineCapture(10, "slot"));
             check(RoutinesActivity.uiState(routines.readSlot("movie"), null).applyEnabled,
                     "populated slot must enable Apply");
+            RoutineEngine.Capture emptyCapture = new RoutineEngine.Capture(
+                    java.util.Collections.emptyMap(),
+                    java.util.Collections.singletonList("all reads failed"));
+            check(!RoutinesActivity.uiState(emptyCapture, null).applyEnabled,
+                    "zero-value capture must disable Apply");
+
+            int[] failedWrites = {0};
+            Map<String, java.util.List<Control>> failedFamilies =
+                    new java.util.LinkedHashMap<>();
+            failedFamilies.put("picture", java.util.Collections.singletonList(
+                    new Control("broken", "Broken", new ControlAdapter() {
+                        @Override
+                        public int read() throws Exception {
+                            throw new Exception("read failed");
+                        }
+
+                        @Override
+                        public void write(int value) {
+                            failedWrites[0]++;
+                        }
+
+                        @Override
+                        public int min() { return 0; }
+
+                        @Override
+                        public int max() { return 100; }
+                    })));
+            RoutineEngine.Capture failedCapture = RoutineEngine.capture(failedFamilies);
+            check(failedCapture.values.isEmpty() && failedCapture.warnings.size() == 1
+                            && failedWrites[0] == 0,
+                    "all-getters-fail capture must be empty with no writes");
+            String occupied = JsonFileStore.read(new File(directory, "routines/routines.json"));
+            boolean saveFailed = false;
+            try {
+                RoutinesActivity.saveCapture(routines, "movie", failedCapture);
+            } catch (Exception expected) {
+                saveFailed = true;
+            }
+            check(saveFailed && occupied.equals(
+                            JsonFileStore.read(new File(directory, "routines/routines.json")))
+                            && routines.readSlot("movie").values.get("picture:brightness") == 10,
+                    "zero-value save must preserve the occupied slot document");
 
             BackupRecoveryActivity.ImportState valid = BackupRecoveryActivity.inspect(
                     root, families, "test-fingerprint");
@@ -541,6 +600,7 @@ public final class DeviceTests {
                 "positive Apply must save undo before RoutineEngine.apply");
 
         FakeAccess access = new FakeAccess(new HashMap<>(), new HashMap<>());
+        vendor.value = 105;
         JSONObject root = PortableBackup.capture(families, access,
                 "1.6.0", "test-fingerprint", "2026-11-03T00:00:00Z");
         persistentWrites[0] = 0;
@@ -556,24 +616,65 @@ public final class DeviceTests {
                         safety -> {
                             persistentWrites[0]++;
                             order.add("safety");
+                            check(safety == root, "prepared safety instance must be persisted");
                         },
                         document -> {
                             order.add("restore");
                             return RestoreEngine.restore(document, families,
                                     "test-fingerprint", projection -> { });
-                        });
-        check(restore.onConfirmation(false, root) == null,
+                        },
+                        safety -> PortableBackup.preview(safety, families, "test-fingerprint"));
+        BackupRecoveryActivity.RestorePreparation prepared = restore.prepare(root);
+        check(prepared.confirmation.contains("Safety omissions / warnings: 1")
+                        && prepared.confirmation.contains("Vendor"),
+                "confirmation model must contain prepared safety omissions");
+        check(restore.onConfirmation(false, prepared) == null,
                 "negative Restore must not produce a result");
-        check(restore.onConfirmation(false, root) == null,
+        check(restore.onConfirmation(false, prepared) == null,
                 "BACK Restore must not produce a result");
         check(persistentWrites[0] == 0 && backlight.writes == 0 && vendor.writes == 0
-                        && access.writes == 0 && order.isEmpty(),
-                "negative/BACK Restore must leave persistent and hardware writes at zero");
-        RestoreEngine.Result restored = restore.onConfirmation(true, root);
+                        && access.writes == 0 && order.equals(
+                                java.util.Collections.singletonList("capture")),
+                "negative/BACK Restore must not persist or write after preparation");
+        RestoreEngine.Result restored = restore.onConfirmation(true, prepared);
         check(restored.failures.isEmpty()
                         && order.equals(java.util.Arrays.asList("capture", "safety", "restore"))
                         && persistentWrites[0] == 1,
-                "positive Restore must save safety before RestoreEngine.restore");
+                "positive Restore must save prepared safety before RestoreEngine.restore");
+
+        int[] restoreCalls = {0};
+        BackupRecoveryActivity.RestoreController captureFailure =
+                new BackupRecoveryActivity.RestoreController(() -> {
+                    throw new Exception("capture failed");
+                }, safety -> { }, document -> {
+                    restoreCalls[0]++;
+                    return null;
+                }, safety -> PortableBackup.preview(safety, families, "test-fingerprint"));
+        boolean failed = false;
+        try {
+            captureFailure.prepare(root);
+        } catch (Exception expected) {
+            failed = true;
+        }
+        check(failed && restoreCalls[0] == 0,
+                "capture failure must prevent dialog preparation and restore");
+
+        BackupRecoveryActivity.RestoreController saveFailure =
+                new BackupRecoveryActivity.RestoreController(() -> root, safety -> {
+                    throw new Exception("save failed");
+                }, document -> {
+                    restoreCalls[0]++;
+                    return null;
+                }, safety -> PortableBackup.preview(safety, families, "test-fingerprint"));
+        BackupRecoveryActivity.RestorePreparation savePrepared = saveFailure.prepare(root);
+        failed = false;
+        try {
+            saveFailure.onConfirmation(true, savePrepared);
+        } catch (Exception expected) {
+            failed = true;
+        }
+        check(failed && restoreCalls[0] == 0,
+                "safety save failure must prevent every restore write");
     }
 
     private static void testPortableBackup() throws Exception {
@@ -603,7 +704,8 @@ public final class DeviceTests {
         check(!picture.has("vendor") && root.getJSONArray("warnings").length() == 1,
                 "out-of-domain vendor getter must be omitted with a warning");
 
-        PortableBackup.Preview preview = PortableBackup.preview(root, "test-fingerprint");
+        PortableBackup.Preview preview = PortableBackup.preview(
+                root, families, "test-fingerprint");
         check(preview.summary.contains("hy450-control-backup")
                         && preview.summary.contains("schema 1")
                         && preview.summary.contains(createdUtc),
@@ -627,6 +729,21 @@ public final class DeviceTests {
         check(backlight.writes == 0 && vendor.writes == 0 && access.writes == 0,
                 "validation must not write");
 
+        JSONObject silent = new JSONObject(root.toString());
+        silent.put("warnings", new org.json.JSONArray());
+        PortableBackup.Preview silentPreview = PortableBackup.preview(
+                silent, families, "test-fingerprint");
+        PortableBackup.Validated silentValid = PortableBackup.validate(
+                silent, families, "test-fingerprint");
+        check(silentPreview.summary.contains("Included picture controls: 1/2")
+                        && silentPreview.summary.contains("Projection values: "
+                                + root.getJSONObject("projection").length())
+                        && silentPreview.warnings.size() == 1
+                        && silentPreview.warnings.get(0).contains("picture:vendor")
+                        && silentValid.warnings.size() == 1
+                        && backlight.writes == 0 && vendor.writes == 0,
+                "silently incomplete document must expose derived counts and omissions");
+
         backlight.value = 10;
         globals.put("GsInitXYZ", "created-later");
         globals.put("JbCamX", "changed");
@@ -644,7 +761,7 @@ public final class DeviceTests {
         JSONObject mismatch = new JSONObject(root.toString());
         mismatch.put("firmware", "other-fingerprint");
         PortableBackup.Preview mismatchPreview = PortableBackup.preview(
-                mismatch, "test-fingerprint");
+                mismatch, families, "test-fingerprint");
         check(!mismatchPreview.firmwareMatches, "preview must report firmware mismatch");
         expectPortableInvalid(mismatch, "firmware mismatch");
 
@@ -781,6 +898,59 @@ public final class DeviceTests {
         for (String key : forbidden) {
             check(!encoded.contains("\"" + key + "\""), "diagnostic allowlist: " + key);
         }
+    }
+
+    private static void testOwnerAssistantScanState() {
+        class ScanAdapter implements ControlAdapter {
+            private final int value;
+            private final boolean writable;
+            private final Exception failure;
+            int writes;
+
+            ScanAdapter(int value, boolean writable, Exception failure) {
+                this.value = value;
+                this.writable = writable;
+                this.failure = failure;
+            }
+
+            @Override
+            public int read() throws Exception {
+                if (failure != null) throw failure;
+                return value;
+            }
+
+            @Override
+            public void write(int value) {
+                writes++;
+            }
+
+            @Override
+            public int min() { return 0; }
+
+            @Override
+            public int max() { return 100; }
+
+            @Override
+            public boolean isWritable() { return writable; }
+        }
+
+        ScanAdapter readOnly = new ScanAdapter(42, false, null);
+        ScanAdapter failed = new ScanAdapter(0, true, new Exception("read failed"));
+        ScanAdapter healthy = new ScanAdapter(7, true, null);
+        Map<String, java.util.List<Control>> families = new java.util.LinkedHashMap<>();
+        families.put("picture", java.util.Arrays.asList(
+                new Control("read-only", "Read only", readOnly),
+                new Control("broken", "Broken", failed),
+                new Control("healthy", "Healthy", healthy)));
+        OwnerAssistantActivity.ScanState state = OwnerAssistantActivity.scanState(
+                CapabilityReport.scan(families));
+        check(state.total == 3 && state.readable == 2 && state.writable == 2
+                        && state.unavailable == 1 && state.failed == 1
+                        && state.summary.equals("Setup check: 3 controls • 2 readable • "
+                                + "2 writable • 1 unavailable • 1 failed")
+                        && state.details.contains("Broken: read failed")
+                        && readOnly.writes == 0 && failed.writes == 0 && healthy.writes == 0,
+                "read-only and read-failure controls must have independent UI counts");
     }
 
     private static void testAmbientScenes() {

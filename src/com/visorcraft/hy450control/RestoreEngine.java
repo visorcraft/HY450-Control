@@ -15,10 +15,14 @@ public final class RestoreEngine {
 
     public static final class Result {
         public final int applied;
+        public final int familyApplied;
+        public final int projectionApplied;
         public final List<String> failures;
 
-        private Result(int applied, List<String> failures) {
-            this.applied = applied;
+        private Result(int familyApplied, int projectionApplied, List<String> failures) {
+            this.familyApplied = familyApplied;
+            this.projectionApplied = projectionApplied;
+            this.applied = familyApplied + projectionApplied;
             this.failures = Collections.unmodifiableList(new ArrayList<>(failures));
         }
     }
@@ -31,12 +35,14 @@ public final class RestoreEngine {
         RoutineEngine.Result applied = RoutineEngine.apply(families, valid.values);
         List<String> failures = new ArrayList<>();
         for (String failure : applied.failures) failures.add(bound(failure));
+        int projectionApplied = 0;
         try {
             projectionRestore.restore(valid.projection);
+            projectionApplied = 1;
         } catch (Exception error) {
             failures.add(bound("Projection: " + Errors.describe(error)));
         }
-        return new Result(applied.applied, failures);
+        return new Result(applied.applied, projectionApplied, failures);
     }
 
     private static String bound(String failure) {

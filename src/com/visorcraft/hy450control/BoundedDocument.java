@@ -6,6 +6,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 
 final class BoundedDocument {
+    static final String EXPORT_MODE = "wt";
     private static final int MAX_BYTES = 1024 * 1024;
 
     private BoundedDocument() {}

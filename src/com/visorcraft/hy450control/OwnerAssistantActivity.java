@@ -71,33 +71,62 @@ public final class OwnerAssistantActivity extends Activity {
         root.post(setup::requestFocus);
     }
 
-    private void showScan() {
-        try {
-            CapabilityReport report = CapabilityReport.scan(loadFamilies());
-            int readable = 0;
-            int writable = 0;
-            int failures = 0;
-            StringBuilder detail = new StringBuilder();
-            for (CapabilityReport.Entry entry : report.entries) {
-                if (entry.readable) readable++;
-                if (entry.writable) writable++;
-                if (!entry.readable) {
-                    failures++;
-                    if (failures <= MAX_DETAILS) {
-                        if (detail.length() > 0) detail.append("\n");
-                        detail.append(entry.title).append(": ").append(entry.error);
-                    }
+    static final class ScanState {
+        final int total;
+        final int readable;
+        final int writable;
+        final int unavailable;
+        final int failed;
+        final String summary;
+        final String details;
+
+        ScanState(int total, int readable, int writable, int unavailable, int failed,
+                String summary, String details) {
+            this.total = total;
+            this.readable = readable;
+            this.writable = writable;
+            this.unavailable = unavailable;
+            this.failed = failed;
+            this.summary = summary;
+            this.details = details;
+        }
+    }
+
+    static ScanState scanState(CapabilityReport report) {
+        int readable = 0;
+        int writable = 0;
+        int unavailable = 0;
+        int failed = 0;
+        StringBuilder detail = new StringBuilder();
+        for (CapabilityReport.Entry entry : report.entries) {
+            if (entry.readable) readable++;
+            if (entry.writable) writable++;
+            else unavailable++;
+            if (!entry.readable) {
+                failed++;
+                if (failed <= MAX_DETAILS) {
+                    if (detail.length() > 0) detail.append("\n");
+                    detail.append(entry.title).append(": ").append(entry.error);
                 }
             }
-            status.setText("Setup check: " + report.entries.size() + " controls • "
-                    + readable + " readable • " + writable + " writable • "
-                    + failures + " unavailable");
-            if (failures > MAX_DETAILS) {
-                detail.append("\n...and ").append(failures - MAX_DETAILS).append(" more");
-            }
-            details.setText(detail.length() == 0
-                    ? "All scanned controls returned values; no settings were changed."
-                    : detail.toString());
+        }
+        String summary = "Setup check: " + report.entries.size() + " controls • "
+                + readable + " readable • " + writable + " writable • "
+                + unavailable + " unavailable • " + failed + " failed";
+        if (failed > MAX_DETAILS) {
+            detail.append("\n...and ").append(failed - MAX_DETAILS).append(" more");
+        }
+        return new ScanState(report.entries.size(), readable, writable, unavailable, failed,
+                summary, detail.length() == 0
+                        ? "All scanned controls returned values; no settings were changed."
+                        : detail.toString());
+    }
+
+    private void showScan() {
+        try {
+            ScanState state = scanState(CapabilityReport.scan(loadFamilies()));
+            status.setText(state.summary);
+            details.setText(state.details);
         } catch (Exception error) {
             status.setText("Setup check unavailable: " + Errors.describe(error));
             details.setText("No settings were changed");
@@ -144,7 +173,8 @@ public final class OwnerAssistantActivity extends Activity {
             return;
         }
         Uri target = data.getData();
-        try (OutputStream output = getContentResolver().openOutputStream(target)) {
+        try (OutputStream output = getContentResolver().openOutputStream(
+                target, BoundedDocument.EXPORT_MODE)) {
             if (output == null) throw new IllegalStateException("Document stream unavailable");
             BoundedDocument.write(output, document.toString(2).getBytes(StandardCharsets.UTF_8));
             status.setText("Diagnostic report exported");

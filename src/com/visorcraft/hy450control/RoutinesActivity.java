@@ -69,7 +69,13 @@ public final class RoutinesActivity extends Activity {
     private TextView values;
 
     static UiState uiState(RoutineEngine.Capture slot, RoutineEngine.Capture undo) {
-        return new UiState(slot != null, undo != null);
+        return new UiState(slot != null && !slot.values.isEmpty(), undo != null);
+    }
+
+    static void saveCapture(RoutineStore store, String slot, RoutineEngine.Capture capture)
+            throws Exception {
+        if (capture.values.isEmpty()) throw new IllegalStateException("No values captured");
+        store.saveSlot(slot, capture);
     }
 
     @Override
@@ -148,7 +154,7 @@ public final class RoutinesActivity extends Activity {
     private void saveSelected() {
         try {
             RoutineEngine.Capture capture = RoutineEngine.capture(families());
-            store.saveSlot(selected, capture);
+            saveCapture(store, selected, capture);
             status.setText(label(selected) + " saved • " + capture.values.size()
                     + " values • " + capture.warnings.size() + " omissions");
             refreshSlots();
@@ -160,7 +166,7 @@ public final class RoutinesActivity extends Activity {
     private void confirmApply() {
         try {
             final RoutineEngine.Capture routine = store.readSlot(selected);
-            if (routine == null) {
+            if (routine == null || routine.values.isEmpty()) {
                 refreshSlots();
                 return;
             }

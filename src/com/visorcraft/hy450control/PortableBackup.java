@@ -101,9 +101,44 @@ public final class PortableBackup {
         return new Preview(summary, firmwareMatches, warnings);
     }
 
+    public static Preview preview(JSONObject root, Map<String, List<Control>> families,
+            String fingerprint) throws Exception {
+        Preview base = preview(root, fingerprint);
+        JSONObject storedFamilies = root.getJSONObject("families");
+        List<String> warnings = new ArrayList<>(base.warnings);
+        StringBuilder summary = new StringBuilder(base.summary);
+        for (String family : FAMILY_ORDER) {
+            List<Control> controls = families.get(family);
+            if (controls == null) continue;
+            JSONObject stored = storedFamilies.has(family)
+                    ? storedFamilies.getJSONObject(family) : null;
+            int included = 0;
+            int writable = 0;
+            for (Control control : controls) {
+                if (!control.adapter.isWritable()) continue;
+                writable++;
+                if (stored != null && stored.has(control.id)) {
+                    included++;
+                } else if (!hasControlWarning(warnings, control.title)) {
+                    warnings.add("Missing writable control: " + family + ":" + control.id);
+                }
+            }
+            summary.append("\nIncluded ").append(family).append(" controls: ")
+                    .append(included).append('/').append(writable);
+        }
+        summary.append("\nProjection values: ").append(root.getJSONObject("projection").length());
+        return new Preview(summary.toString(), base.firmwareMatches, warnings);
+    }
+
+    private static boolean hasControlWarning(List<String> warnings, String title) {
+        String prefix = title + ":";
+        for (String warning : warnings) if (warning.startsWith(prefix)) return true;
+        return false;
+    }
+
     public static Validated validate(JSONObject root, Map<String, List<Control>> families,
             String fingerprint) throws Exception {
-        Preview preview = preview(root, fingerprint);
+        Preview preview = preview(root, families, fingerprint);
         if (!preview.firmwareMatches) throw new IllegalStateException("Firmware mismatch");
 
         JSONObject storedFamilies = root.getJSONObject("families");

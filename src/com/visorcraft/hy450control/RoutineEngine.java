@@ -8,6 +8,7 @@ import java.util.Map;
 
 public final class RoutineEngine {
     private static final String[] FAMILIES = {"picture", "audio", "source"};
+    private static final int MAX_WARNING_LENGTH = 160;
 
     public static final class Capture {
         public final Map<String, Integer> values;
@@ -38,7 +39,12 @@ public final class RoutineEngine {
             List<Control> controls = families.get(family);
             if (controls == null) continue;
             for (Control control : controls) {
-                if (!control.adapter.isWritable()) continue;
+                if (!control.adapter.isWritable()) {
+                    String warning = control.title + ": unavailable (read-only)";
+                    warnings.add(warning.length() <= MAX_WARNING_LENGTH
+                            ? warning : warning.substring(0, MAX_WARNING_LENGTH));
+                    continue;
+                }
                 try {
                     int value = control.adapter.read();
                     if (control.adapter.accepts(value)) {
