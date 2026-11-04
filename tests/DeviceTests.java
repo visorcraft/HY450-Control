@@ -95,12 +95,57 @@ public final class DeviceTests {
         check(rejected, "JSON null property must be rejected");
         check("12.5".equals(properties.get(property)), "rejected property must not be written");
 
+        testDiagnosticAllowlist();
         testAmbientScenes();
         testBootScheduling();
         testProjectionValidationRejectsBeforeWrites();
         testReadBackup();
         testBackupStoreDoesNotOverwrite();
         System.out.println("Device tests passed");
+    }
+
+    private static void testDiagnosticAllowlist() throws Exception {
+        ControlAdapter adapter = new ControlAdapter() {
+            @Override
+            public int read() { return 42; }
+
+            @Override
+            public void write(int value) {
+                throw new AssertionError("diagnostic fixture must not write");
+            }
+
+            @Override
+            public int min() { return 0; }
+
+            @Override
+            public int max() { return 100; }
+        };
+        Map<String, java.util.List<Control>> families = new java.util.LinkedHashMap<>();
+        families.put("picture", java.util.Collections.singletonList(
+                new Control("brightness", "Brightness", adapter)));
+        CapabilityReport report = CapabilityReport.scan(families);
+        JSONObject json = report.toDiagnosticJson(
+                "1.6.0", "test-fingerprint", 34, "2026-11-03T00:00:00Z");
+        check("hy450-control-diagnostic".equals(json.getString("type")), "diagnostic type");
+        check(json.getInt("schema") == 1, "diagnostic schema");
+        check("1.6.0".equals(json.getString("appVersion")), "diagnostic app version");
+        check("test-fingerprint".equals(json.getString("fingerprint")), "diagnostic firmware");
+        check(json.getInt("sdk") == 34, "diagnostic SDK");
+        check("2026-11-03T00:00:00Z".equals(json.getString("createdUtc")),
+                "diagnostic timestamp");
+        check(json.getJSONArray("controls").length() == 1, "diagnostic control entries");
+        JSONObject control = json.getJSONArray("controls").getJSONObject(0);
+        check("picture".equals(control.getString("family"))
+                        && "brightness".equals(control.getString("id"))
+                        && "Brightness".equals(control.getString("title"))
+                        && control.getBoolean("writable") && control.getBoolean("readable")
+                        && "42".equals(control.getString("value")),
+                "diagnostic control fields");
+        String encoded = json.toString();
+        String[] forbidden = {"serial", "ip", "mac", "accounts", "packages", "logcat", "properties"};
+        for (String key : forbidden) {
+            check(!encoded.contains("\"" + key + "\""), "diagnostic allowlist: " + key);
+        }
     }
 
     private static void testAmbientScenes() {

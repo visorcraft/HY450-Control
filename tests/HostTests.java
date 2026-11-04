@@ -108,6 +108,7 @@ public final class HostTests {
         check("IllegalStateException".equals(Errors.describe(new IllegalStateException("  "))),
                 "blank message must use class name");
 
+        testCapabilityReport();
         testOemRecovery();
         testProjectionValidation();
         testAutomationSelection();
@@ -201,6 +202,100 @@ public final class HostTests {
         }
 
         System.out.println("Host tests passed");
+    }
+
+    private static void testCapabilityReport() {
+        class ScanAdapter implements ControlAdapter {
+            private final int value;
+            private final boolean writable;
+            private final Exception failure;
+            private int writeCalls;
+
+            ScanAdapter(int value, boolean writable, Exception failure) {
+                this.value = value;
+                this.writable = writable;
+                this.failure = failure;
+            }
+
+            @Override
+            public int read() throws Exception {
+                if (failure != null) throw failure;
+                return value;
+            }
+
+            @Override
+            public void write(int value) {
+                writeCalls++;
+            }
+
+            @Override
+            public int min() { return 0; }
+
+            @Override
+            public int max() { return 100; }
+
+            @Override
+            public boolean isWritable() { return writable; }
+        }
+
+        ScanAdapter validAdapter = new ScanAdapter(42, true, null);
+        check(!validAdapter.accepts(-1), "value below range must be rejected");
+        check(validAdapter.accepts(0), "range minimum must be accepted");
+        check(validAdapter.accepts(100), "range maximum must be accepted");
+        check(!validAdapter.accepts(101), "value above range must be rejected");
+
+        String longError = new String(new char[240]).replace('\0', 'x');
+        ScanAdapter outOfRangeAdapter = new ScanAdapter(105, true, null);
+        ScanAdapter brokenAdapter = new ScanAdapter(0, true, new Exception(longError));
+        ScanAdapter readOnlyAdapter = new ScanAdapter(60, false, null);
+        ScanAdapter formatBrokenAdapter = new ScanAdapter(20, true, null) {
+            @Override
+            public String format(int value) {
+                throw new IllegalStateException(longError);
+            }
+        };
+        Control valid = new Control("valid", "Valid", validAdapter);
+        Control outOfRange = new Control("out-of-range", "Out of range", outOfRangeAdapter);
+        Control broken = new Control("broken", "Broken", brokenAdapter);
+        Control readOnly = new Control("read-only", "Read only", readOnlyAdapter);
+        Control formatBroken = new Control("format-broken", "Format broken", formatBrokenAdapter);
+        Map<String, List<Control>> families = new java.util.LinkedHashMap<>();
+        families.put("picture", Arrays.asList(valid, outOfRange, broken, readOnly, formatBroken));
+
+        CapabilityReport report = CapabilityReport.scan(families);
+        check(report.entries.size() == 5, "scan must include every control");
+        check("valid".equals(report.entries.get(0).id)
+                        && "out-of-range".equals(report.entries.get(1).id)
+                        && "broken".equals(report.entries.get(2).id)
+                        && "read-only".equals(report.entries.get(3).id)
+                        && "format-broken".equals(report.entries.get(4).id),
+                "scan must preserve control order");
+        check("picture".equals(report.entries.get(0).family)
+                        && "Valid".equals(report.entries.get(0).title),
+                "scan must expose family and title");
+        check(report.entries.get(0).readable && "42".equals(report.entries.get(0).value)
+                        && report.entries.get(0).error == null,
+                "valid value must be readable");
+        check(report.entries.get(1).readable && "105".equals(report.entries.get(1).value),
+                "scan must report actual out-of-range vendor value");
+        check(!report.entries.get(2).readable && report.entries.get(2).value == null
+                        && report.entries.get(2).error.length() == 160,
+                "read errors must be bounded to 160 UTF-16 code units");
+        check(report.entries.get(3).readable && !report.entries.get(3).writable,
+                "read-only controls must remain readable and non-writable");
+        check(!report.entries.get(4).readable && report.entries.get(4).error.length() == 160,
+                "format errors must be isolated and bounded");
+        check(validAdapter.writeCalls == 0 && outOfRangeAdapter.writeCalls == 0
+                        && brokenAdapter.writeCalls == 0 && readOnlyAdapter.writeCalls == 0
+                        && formatBrokenAdapter.writeCalls == 0,
+                "capability scan must not write");
+        boolean immutable = false;
+        try {
+            report.entries.add(report.entries.get(0));
+        } catch (UnsupportedOperationException expected) {
+            immutable = true;
+        }
+        check(immutable, "capability entries must be immutable");
     }
 
     private static void testVendorAdapters() throws Exception {
