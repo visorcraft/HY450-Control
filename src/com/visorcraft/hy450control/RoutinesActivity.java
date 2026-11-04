@@ -31,6 +31,33 @@ public final class RoutinesActivity extends Activity {
         }
     }
 
+    interface UndoSaver {
+        void save(RoutineEngine.Capture capture) throws Exception;
+    }
+
+    interface ApplyRunner {
+        RoutineEngine.Result apply(Map<String, List<Control>> families,
+                Map<String, Integer> values) throws Exception;
+    }
+
+    static final class ApplyController {
+        private final UndoSaver undoSaver;
+        private final ApplyRunner applyRunner;
+
+        ApplyController(UndoSaver undoSaver, ApplyRunner applyRunner) {
+            this.undoSaver = undoSaver;
+            this.applyRunner = applyRunner;
+        }
+
+        RoutineEngine.Result onConfirmation(boolean confirmed,
+                Map<String, List<Control>> families, RoutineEngine.Capture routine,
+                RoutineEngine.Capture undo) throws Exception {
+            if (!confirmed) return null;
+            undoSaver.save(undo);
+            return applyRunner.apply(families, routine.values);
+        }
+    }
+
     private final Button[] slotButtons = new Button[SLOTS.length];
     private RoutineStore store;
     private Map<String, List<Control>> families;
@@ -139,22 +166,38 @@ public final class RoutinesActivity extends Activity {
             }
             RoutineEngine.validate(families(), routine.values);
             final RoutineEngine.Capture undo = RoutineEngine.capture(families());
-            new AlertDialog.Builder(this)
+            final ApplyController controller = new ApplyController(
+                    store::saveUndo, RoutineEngine::apply);
+            AlertDialog dialog = new AlertDialog.Builder(this)
                     .setTitle("Apply " + label(selected) + " routine?")
                     .setMessage("Current values are saved for Undo before any apply write.\n"
                             + undoText(undo))
-                    .setNegativeButton("Cancel", null)
-                    .setPositiveButton("Apply", (dialog, which) -> apply(routine, undo))
-                    .show();
+                    .setNegativeButton("Cancel",
+                            (ignored, which) -> cancelApply(controller, routine, undo))
+                    .setPositiveButton("Apply",
+                            (ignored, which) -> apply(controller, routine, undo))
+                    .create();
+            dialog.setOnCancelListener(ignored -> cancelApply(controller, routine, undo));
+            dialog.show();
         } catch (Exception error) {
             showError("Apply unavailable", error);
         }
     }
 
-    private void apply(RoutineEngine.Capture routine, RoutineEngine.Capture undo) {
+    private void cancelApply(ApplyController controller, RoutineEngine.Capture routine,
+            RoutineEngine.Capture undo) {
         try {
-            store.saveUndo(undo);
-            RoutineEngine.Result result = RoutineEngine.apply(families(), routine.values);
+            controller.onConfirmation(false, null, routine, undo);
+            status.setText("Apply cancelled • no changes made");
+        } catch (Exception error) {
+            showError("Apply cancellation failed", error);
+        }
+    }
+
+    private void apply(ApplyController controller, RoutineEngine.Capture routine,
+            RoutineEngine.Capture undo) {
+        try {
+            RoutineEngine.Result result = controller.onConfirmation(true, families(), routine, undo);
             showResult("Applied", result.applied, result.failures);
         } catch (Exception error) {
             showError("Apply failed", error);

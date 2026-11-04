@@ -140,6 +140,7 @@ public final class DeviceTests {
         testOwnerBackupStore();
         testRestoreEngine();
         testOwnerAssistantUiState();
+        testOwnerAssistantControllers();
         System.out.println("Device tests passed");
     }
 
@@ -384,10 +385,22 @@ public final class DeviceTests {
                     families, "test-fingerprint");
             check(recovered.restoreEnabled,
                     "persisted safety document must enable recovery after recreation");
-            BackupRecoveryActivity.ImportState cancelled =
-                    BackupRecoveryActivity.cancelledImport();
-            check(!cancelled.restoreEnabled && cancelled.root == null,
-                    "SAF cancellation/BACK must clear import eligibility");
+            int[] importCalls = {0};
+            BackupRecoveryActivity.ImportController imports =
+                    new BackupRecoveryActivity.ImportController();
+            BackupRecoveryActivity.ImportState cancelled = imports.onActivityResult(
+                    android.app.Activity.RESULT_CANCELED, null, uri -> {
+                        importCalls[0]++;
+                        return valid;
+                    });
+            BackupRecoveryActivity.ImportState missingData = imports.onActivityResult(
+                    android.app.Activity.RESULT_OK, null, uri -> {
+                        importCalls[0]++;
+                        return valid;
+                    });
+            check(!cancelled.restoreEnabled && cancelled.root == null
+                            && !missingData.restoreEnabled && importCalls[0] == 0,
+                    "SAF cancellation/BACK must use the Activity path without reading or writing");
 
             android.content.Context context = nonLiveContext(1920, 1080);
             android.widget.TextView preview = BackupRecoveryActivity.renderPreview(
@@ -402,6 +415,75 @@ public final class DeviceTests {
         } finally {
             deleteRecursively(directory);
         }
+    }
+
+    private static void testOwnerAssistantControllers() throws Exception {
+        FakePortableAdapter backlight = new FakePortableAdapter(10);
+        FakePortableAdapter vendor = new FakePortableAdapter(20);
+        Map<String, java.util.List<Control>> families = portableFamilies(backlight, vendor);
+        RoutineEngine.Capture routine = new RoutineEngine.Capture(
+                java.util.Collections.singletonMap("picture:backlight", 50),
+                java.util.Collections.emptyList());
+        RoutineEngine.Capture undo = new RoutineEngine.Capture(
+                java.util.Collections.singletonMap("picture:backlight", 10),
+                java.util.Collections.emptyList());
+        java.util.List<String> order = new java.util.ArrayList<>();
+        int[] persistentWrites = {0};
+        RoutinesActivity.ApplyController apply = new RoutinesActivity.ApplyController(
+                capture -> {
+                    persistentWrites[0]++;
+                    order.add("undo");
+                },
+                (familyValues, values) -> {
+                    order.add("apply");
+                    return RoutineEngine.apply(familyValues, values);
+                });
+        check(apply.onConfirmation(false, families, routine, undo) == null,
+                "negative Apply must not produce a result");
+        check(apply.onConfirmation(false, families, routine, undo) == null,
+                "BACK Apply must not produce a result");
+        check(persistentWrites[0] == 0 && backlight.writes == 0 && vendor.writes == 0
+                        && order.isEmpty(),
+                "negative/BACK Apply must leave persistent and hardware writes at zero");
+        RoutineEngine.Result applied = apply.onConfirmation(true, families, routine, undo);
+        check(applied.applied == 1 && order.equals(java.util.Arrays.asList("undo", "apply"))
+                        && persistentWrites[0] == 1,
+                "positive Apply must save undo before RoutineEngine.apply");
+
+        FakeAccess access = new FakeAccess(new HashMap<>(), new HashMap<>());
+        JSONObject root = PortableBackup.capture(families, access,
+                "1.6.0", "test-fingerprint", "2026-11-03T00:00:00Z");
+        persistentWrites[0] = 0;
+        backlight.writes = 0;
+        vendor.writes = 0;
+        order.clear();
+        BackupRecoveryActivity.RestoreController restore =
+                new BackupRecoveryActivity.RestoreController(
+                        () -> {
+                            order.add("capture");
+                            return root;
+                        },
+                        safety -> {
+                            persistentWrites[0]++;
+                            order.add("safety");
+                        },
+                        document -> {
+                            order.add("restore");
+                            return RestoreEngine.restore(document, families,
+                                    "test-fingerprint", projection -> { });
+                        });
+        check(restore.onConfirmation(false, root) == null,
+                "negative Restore must not produce a result");
+        check(restore.onConfirmation(false, root) == null,
+                "BACK Restore must not produce a result");
+        check(persistentWrites[0] == 0 && backlight.writes == 0 && vendor.writes == 0
+                        && access.writes == 0 && order.isEmpty(),
+                "negative/BACK Restore must leave persistent and hardware writes at zero");
+        RestoreEngine.Result restored = restore.onConfirmation(true, root);
+        check(restored.failures.isEmpty()
+                        && order.equals(java.util.Arrays.asList("capture", "safety", "restore"))
+                        && persistentWrites[0] == 1,
+                "positive Restore must save safety before RestoreEngine.restore");
     }
 
     private static android.content.Context nonLiveContext(int width, int height) {

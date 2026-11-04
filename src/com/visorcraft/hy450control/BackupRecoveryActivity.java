@@ -49,6 +49,51 @@ public final class BackupRecoveryActivity extends Activity {
         }
     }
 
+    interface ImportLoader {
+        ImportState load(Uri source) throws Exception;
+    }
+
+    static final class ImportController {
+        ImportState onActivityResult(int resultCode, Uri source, ImportLoader loader)
+                throws Exception {
+            if (resultCode != RESULT_OK || source == null) return cancelledImport();
+            return loader.load(source);
+        }
+    }
+
+    interface SafetyCapture {
+        JSONObject capture() throws Exception;
+    }
+
+    interface SafetySaver {
+        void save(JSONObject safety) throws Exception;
+    }
+
+    interface RestoreRunner {
+        RestoreEngine.Result restore(JSONObject document) throws Exception;
+    }
+
+    static final class RestoreController {
+        private final SafetyCapture safetyCapture;
+        private final SafetySaver safetySaver;
+        private final RestoreRunner restoreRunner;
+
+        RestoreController(SafetyCapture safetyCapture, SafetySaver safetySaver,
+                RestoreRunner restoreRunner) {
+            this.safetyCapture = safetyCapture;
+            this.safetySaver = safetySaver;
+            this.restoreRunner = restoreRunner;
+        }
+
+        RestoreEngine.Result onConfirmation(boolean confirmed, JSONObject document)
+                throws Exception {
+            if (!confirmed) return null;
+            JSONObject safety = safetyCapture.capture();
+            safetySaver.save(safety);
+            return restoreRunner.restore(document);
+        }
+    }
+
     private Map<String, List<Control>> families;
     private JSONObject pendingExport;
     private ImportState imported = cancelledImport();
@@ -176,13 +221,20 @@ public final class BackupRecoveryActivity extends Activity {
             return;
         }
         if (requestCode != OPEN_BACKUP) return;
-        if (resultCode != RESULT_OK || data == null || data.getData() == null) {
-            imported = cancelledImport();
-            status.setText("Backup import cancelled • no changes made");
-            showImport();
-            return;
+        Uri source = data == null ? null : data.getData();
+        try {
+            imported = new ImportController().onActivityResult(resultCode, source, this::loadImport);
+            if (resultCode != RESULT_OK || source == null) {
+                status.setText("Backup import cancelled • no changes made");
+            } else {
+                status.setText(imported.restoreEnabled ? "Backup imported in memory"
+                        : "Backup is not restorable");
+            }
+        } catch (Exception failure) {
+            imported = new ImportState(null, null, Errors.describe(failure), false);
+            status.setText("Backup import failed • no changes made");
         }
-        readImport(data.getData());
+        showImport();
     }
 
     private void writeExport(Uri target, JSONObject document) {
@@ -196,38 +248,48 @@ public final class BackupRecoveryActivity extends Activity {
         }
     }
 
-    private void readImport(Uri source) {
+    private ImportState loadImport(Uri source) throws Exception {
         try (InputStream input = getContentResolver().openInputStream(source)) {
             if (input == null) throw new IllegalStateException("Document stream unavailable");
             String json = new String(BoundedDocument.read(input), StandardCharsets.UTF_8);
-            imported = inspect(new JSONObject(json), families(), Build.FINGERPRINT);
-            status.setText(imported.restoreEnabled ? "Backup imported in memory"
-                    : "Backup is not restorable");
-        } catch (Exception failure) {
-            imported = new ImportState(null, null, Errors.describe(failure), false);
-            status.setText("Backup import failed • no changes made");
+            return inspect(new JSONObject(json), families(), Build.FINGERPRINT);
         }
-        showImport();
     }
 
     private void confirmImportedRestore() {
         if (!imported.restoreEnabled || imported.root == null) return;
-        new AlertDialog.Builder(this)
+        final RestoreController controller = restoreController();
+        AlertDialog dialog = new AlertDialog.Builder(this)
                 .setTitle("Restore imported backup?")
                 .setMessage("A fresh pre-restore safety copy is saved before any write.\n"
                         + previewText(imported.preview))
-                .setNegativeButton("Cancel", null)
-                .setPositiveButton("Save safety & restore", (dialog, which) -> restoreImported())
-                .show();
+                .setNegativeButton("Cancel", (ignored, which) -> cancelRestore(controller))
+                .setPositiveButton("Save safety & restore",
+                        (ignored, which) -> restoreImported(controller))
+                .create();
+        dialog.setOnCancelListener(ignored -> cancelRestore(controller));
+        dialog.show();
     }
 
-    private void restoreImported() {
+    private void cancelRestore(RestoreController controller) {
         try {
-            JSONObject safety = captureBackup();
-            new OwnerBackupStore(this).saveSafety(safety);
-            RestoreEngine.Result result = RestoreEngine.restore(imported.root, families(),
-                    Build.FINGERPRINT, projection -> OemFocus.cancelAndRun(this,
-                            () -> ProjectionBackup.restoreValues(this, projection)));
+            controller.onConfirmation(false, imported.root);
+            status.setText("Restore cancelled • no changes made");
+        } catch (Exception failure) {
+            showError("Restore cancellation failed", failure);
+        }
+    }
+
+    private RestoreController restoreController() {
+        return new RestoreController(this::captureBackup, new OwnerBackupStore(this)::saveSafety,
+                document -> RestoreEngine.restore(document, families(), Build.FINGERPRINT,
+                        projection -> OemFocus.cancelAndRun(this,
+                                () -> ProjectionBackup.restoreValues(this, projection))));
+    }
+
+    private void restoreImported(RestoreController controller) {
+        try {
+            RestoreEngine.Result result = controller.onConfirmation(true, imported.root);
             showResult("Restore", result);
             refreshRecovery();
         } catch (Exception failure) {
