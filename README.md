@@ -253,7 +253,7 @@ temperature, gamma, and dynamic-backlight values.
 
 ## Verified on hardware
 
-The final 1.6.0/versionCode 12 Owner Assistant source at `d8c4706` was installed
+The final 1.6.0/versionCode 12 Owner Assistant source at `e5a9307` was installed
 through the reversible Magisk module and launch-verified at 1920×1080. The active
 locally signed APK SHA-256 is
 `7afcb116ba3a48fc6ef966ec8a99b845d65c588d5a87d957d3f41dd7e36f8cde`.
