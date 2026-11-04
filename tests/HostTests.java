@@ -108,6 +108,7 @@ public final class HostTests {
         check("IllegalStateException".equals(Errors.describe(new IllegalStateException("  "))),
                 "blank message must use class name");
 
+        testRoutineEngine();
         testCapabilityReport();
         testOemRecovery();
         testProjectionValidation();
@@ -202,6 +203,138 @@ public final class HostTests {
         }
 
         System.out.println("Host tests passed");
+    }
+
+    private static void testRoutineEngine() throws Exception {
+        class RoutineAdapter implements ControlAdapter {
+            private int value;
+            private final boolean writable;
+            private final Exception readFailure;
+            private final Exception writeFailure;
+            private int writeCalls;
+
+            RoutineAdapter(int value, boolean writable, Exception readFailure, Exception writeFailure) {
+                this.value = value;
+                this.writable = writable;
+                this.readFailure = readFailure;
+                this.writeFailure = writeFailure;
+            }
+
+            @Override
+            public int read() throws Exception {
+                if (readFailure != null) throw readFailure;
+                return value;
+            }
+
+            @Override
+            public void write(int value) throws Exception {
+                writeCalls++;
+                if (writeFailure != null) throw writeFailure;
+                this.value = value;
+            }
+
+            @Override
+            public int min() { return 0; }
+
+            @Override
+            public int max() { return 100; }
+
+            @Override
+            public boolean isWritable() { return writable; }
+        }
+
+        RoutineAdapter firstAdapter = new RoutineAdapter(10, true, null, null);
+        RoutineAdapter outsideAdapter = new RoutineAdapter(105, true, null, null);
+        RoutineAdapter brokenAdapter = new RoutineAdapter(0, true,
+                new Exception("read failed"), null);
+        Map<String, List<Control>> captureFamilies = new java.util.LinkedHashMap<>();
+        captureFamilies.put("picture", Arrays.asList(
+                new Control("first", "First", firstAdapter),
+                new Control("outside", "Outside", outsideAdapter),
+                new Control("second", "Second", brokenAdapter)));
+        RoutineEngine.Capture capture = RoutineEngine.capture(captureFamilies);
+        check(capture.values.get("picture:first") == 10, "valid routine value");
+        check(!capture.values.containsKey("picture:outside"),
+                "out-of-range capture must be omitted");
+        check(capture.values.size() == 1 && capture.warnings.size() == 2,
+                "capture omissions must be visible without clamping");
+
+        boolean immutableValues = false;
+        try {
+            capture.values.put("picture:other", 20);
+        } catch (UnsupportedOperationException expected) {
+            immutableValues = true;
+        }
+        check(immutableValues, "routine values must be immutable");
+        boolean immutableWarnings = false;
+        try {
+            capture.warnings.add("unexpected");
+        } catch (UnsupportedOperationException expected) {
+            immutableWarnings = true;
+        }
+        check(immutableWarnings, "routine warnings must be immutable");
+
+        Map<String, Integer> invalid = new HashMap<>(capture.values);
+        invalid.put("picture:second", 105);
+        expectThrows(() -> RoutineEngine.apply(captureFamilies, invalid), "invalid routine");
+        check(firstAdapter.writeCalls == 0 && outsideAdapter.writeCalls == 0
+                        && brokenAdapter.writeCalls == 0,
+                "validation must precede every routine write");
+
+        RoutineAdapter middleAdapter = new RoutineAdapter(20, true, null,
+                new Exception("write failed"));
+        RoutineAdapter lastAdapter = new RoutineAdapter(30, true, null, null);
+        RoutineAdapter readOnlyAdapter = new RoutineAdapter(40, false, null, null);
+        Map<String, List<Control>> applyFamilies = new java.util.LinkedHashMap<>();
+        applyFamilies.put("picture", Arrays.asList(
+                new Control("first", "First", firstAdapter),
+                new Control("middle", "Middle", middleAdapter),
+                new Control("last", "Last", lastAdapter),
+                new Control("read-only", "Read only", readOnlyAdapter)));
+        Map<String, Integer> valid = new HashMap<>();
+        valid.put("picture:first", 20);
+        valid.put("picture:middle", 30);
+        valid.put("picture:last", 40);
+        RoutineEngine.Result result = RoutineEngine.apply(applyFamilies, valid);
+        check(result.applied == 2 && result.failures.size() == 1,
+                "routine apply must aggregate two writes and one failure");
+        check(firstAdapter.value == 20 && lastAdapter.value == 40,
+                "routine apply must continue after a middle write failure");
+        check(readOnlyAdapter.writeCalls == 0, "read-only routine control must not write");
+
+        Map<String, Integer> missingEntry = new HashMap<>(valid);
+        missingEntry.put("picture:missing", 10);
+        expectThrows(() -> RoutineEngine.validate(applyFamilies, missingEntry),
+                "missing routine control must be rejected");
+        Map<String, Integer> readOnlyEntry = new HashMap<>(valid);
+        readOnlyEntry.put("picture:read-only", 10);
+        expectThrows(() -> RoutineEngine.validate(applyFamilies, readOnlyEntry),
+                "read-only routine control must be rejected");
+        Map<String, Integer> unknownEntry = new HashMap<>(valid);
+        unknownEntry.put("unknown:first", 10);
+        expectThrows(() -> RoutineEngine.validate(applyFamilies, unknownEntry),
+                "unknown routine family must be rejected");
+
+        RoutineAdapter pictureFailure = new RoutineAdapter(1, true, null,
+                new Exception("picture"));
+        RoutineAdapter audioFailure = new RoutineAdapter(2, true, null,
+                new Exception("audio"));
+        RoutineAdapter sourceFailure = new RoutineAdapter(3, true, null,
+                new Exception("source"));
+        Map<String, List<Control>> reversed = new java.util.LinkedHashMap<>();
+        reversed.put("source", Arrays.asList(new Control("source", "Source", sourceFailure)));
+        reversed.put("audio", Arrays.asList(new Control("audio", "Audio", audioFailure)));
+        reversed.put("picture", Arrays.asList(new Control("picture", "Picture", pictureFailure)));
+        Map<String, Integer> orderedValues = new HashMap<>();
+        orderedValues.put("picture:picture", 1);
+        orderedValues.put("audio:audio", 2);
+        orderedValues.put("source:source", 3);
+        RoutineEngine.Result ordered = RoutineEngine.apply(reversed, orderedValues);
+        check(ordered.failures.size() == 3
+                        && ordered.failures.get(0).startsWith("Picture: ")
+                        && ordered.failures.get(1).startsWith("Audio: ")
+                        && ordered.failures.get(2).startsWith("Source: "),
+                "routine families must apply in fixed order");
     }
 
     private static void testCapabilityReport() {

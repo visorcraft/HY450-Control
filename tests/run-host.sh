@@ -21,6 +21,7 @@ javac -source 8 -target 8 -cp "$PLATFORM" -d "$CLASSES" \
   src/com/visorcraft/hy450control/OemRecovery.java \
   src/com/visorcraft/hy450control/ProjectionBackup.java \
   src/com/visorcraft/hy450control/ReadOnlyControl.java \
+  src/com/visorcraft/hy450control/RoutineEngine.java \
   src/com/visorcraft/hy450control/SleepSchedule.java \
   src/com/visorcraft/hy450control/Vendor.java \
   src/com/visorcraft/hy450control/VendorControl.java \

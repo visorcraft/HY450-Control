@@ -101,6 +101,7 @@ public final class DeviceTests {
         testProjectionValidationRejectsBeforeWrites();
         testReadBackup();
         testBackupStoreDoesNotOverwrite();
+        testRoutineStore();
         System.out.println("Device tests passed");
     }
 
@@ -311,6 +312,117 @@ public final class DeviceTests {
         } finally {
             deleteRecursively(directory);
         }
+    }
+
+    private static void testRoutineStore() throws Exception {
+        File directory = new File("/data/local/tmp",
+                "hy450-routine-store-" + System.nanoTime());
+        check(directory.mkdirs(), "routine-store test directory must be created");
+        try {
+            RoutineStore store = new RoutineStore(directory);
+            check(store.readSlot("movie") == null && store.readUndo() == null,
+                    "absent routine state must return null");
+            String[] slots = {"movie", "day", "night", "custom"};
+            for (int i = 0; i < slots.length; i++) {
+                store.saveSlot(slots[i], routineCapture(10 + i, "slot " + slots[i]));
+            }
+            for (int i = 0; i < slots.length; i++) {
+                RoutineEngine.Capture restored = store.readSlot(slots[i]);
+                check(restored.values.get("picture:brightness") == 10 + i
+                                && restored.warnings.equals(
+                                        java.util.Collections.singletonList("slot " + slots[i])),
+                        "routine slot round trip: " + slots[i]);
+            }
+            check(!new File(directory, "routines.tmp").exists(),
+                    "atomic routine rename must consume temporary file");
+
+            RoutineEngine.Capture undo = routineCapture(90, "undo");
+            store.saveUndo(undo);
+            check(store.readUndo().values.equals(undo.values)
+                            && store.readUndo().warnings.equals(undo.warnings),
+                    "independent undo round trip");
+            store.saveSlot("movie", routineCapture(20, "replacement"));
+            check(store.readUndo().values.equals(undo.values),
+                    "saving a slot must not modify undo");
+            check(store.readSlot("day").values.get("picture:brightness") == 11,
+                    "atomic slot replacement must preserve other slots");
+            RoutineEngine.Capture replacementUndo = routineCapture(91, "new undo");
+            store.saveUndo(replacementUndo);
+            check(store.readSlot("movie").values.get("picture:brightness") == 20,
+                    "saving undo must not modify a slot");
+            check(store.readUndo().values.equals(replacementUndo.values),
+                    "undo replacement must round trip");
+
+            File slotsFile = new File(directory, "routines.json");
+            String original = JsonFileStore.read(slotsFile);
+            boolean rejected = false;
+            try {
+                store.saveSlot("other", undo);
+            } catch (IllegalArgumentException expected) {
+                rejected = true;
+            }
+            check(rejected, "fifth routine slot must be rejected");
+            check(original.equals(JsonFileStore.read(slotsFile)),
+                    "rejected slot must leave existing JSON unchanged");
+            expectRoutineSlotFailure(store, "other", "unknown slot read must fail");
+
+            File undoFile = new File(directory, "routine-undo.json");
+            write(undoFile, "{not-json");
+            expectRoutineUndoFailure(store, "malformed undo JSON must fail");
+            check(store.readSlot("movie").values.get("picture:brightness") == 20,
+                    "malformed undo must not damage slots");
+            write(undoFile, "{\"schema\":1,\"values\":{},\"warnings\":[],\"extra\":true}");
+            expectRoutineUndoFailure(store, "unknown undo key must fail");
+
+            write(slotsFile, "{not-json");
+            expectRoutineSlotFailure(store, "movie", "malformed slot JSON must fail");
+            write(slotsFile, "{\"schema\":2,\"slots\":{}}");
+            expectRoutineSlotFailure(store, "movie", "unsupported schema must fail");
+            write(slotsFile, "{\"schema\":1,\"slots\":{},\"extra\":true}");
+            expectRoutineSlotFailure(store, "movie", "unknown root key must fail");
+            write(slotsFile, "{\"schema\":1,\"slots\":{\"other\":"
+                    + "{\"values\":{},\"warnings\":[]}}}");
+            expectRoutineSlotFailure(store, "movie", "unknown stored slot must fail");
+            write(slotsFile, "{\"schema\":1,\"slots\":{\"movie\":"
+                    + "{\"values\":{\"picture:brightness\":\"20\"},\"warnings\":[]}}}");
+            expectRoutineSlotFailure(store, "movie", "non-integer routine value must fail");
+            write(slotsFile, "{\"schema\":1,\"slots\":{\"movie\":"
+                    + "{\"values\":{},\"warnings\":[],\"extra\":true}}}");
+            expectRoutineSlotFailure(store, "movie", "unknown capture key must fail");
+            write(slotsFile, "{\"schema\":1,\"slots\":{\"movie\":"
+                    + "{\"values\":{},\"warnings\":[1]}}}");
+            expectRoutineSlotFailure(store, "movie", "non-string warning must fail");
+        } finally {
+            deleteRecursively(directory);
+        }
+    }
+
+    private static RoutineEngine.Capture routineCapture(int value, String warning) {
+        Map<String, Integer> values = new HashMap<>();
+        values.put("picture:brightness", value);
+        return new RoutineEngine.Capture(values, java.util.Collections.singletonList(warning));
+    }
+
+    private static void expectRoutineSlotFailure(RoutineStore store, String slot, String message)
+            throws Exception {
+        boolean thrown = false;
+        try {
+            store.readSlot(slot);
+        } catch (Exception expected) {
+            thrown = true;
+        }
+        check(thrown, message);
+    }
+
+    private static void expectRoutineUndoFailure(RoutineStore store, String message)
+            throws Exception {
+        boolean thrown = false;
+        try {
+            store.readUndo();
+        } catch (Exception expected) {
+            thrown = true;
+        }
+        check(thrown, message);
     }
 
     private static void deleteRecursively(File file) {
