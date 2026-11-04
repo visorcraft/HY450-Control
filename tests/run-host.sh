@@ -10,6 +10,7 @@ mkdir -p "$CLASSES"
 javac -source 8 -target 8 -cp "$PLATFORM" -d "$CLASSES" \
   src/com/visorcraft/hy450control/AutomationSelection.java \
   src/com/visorcraft/hy450control/BestScore.java \
+  src/com/visorcraft/hy450control/BoundedDocument.java \
   src/com/visorcraft/hy450control/BreakoutGame.java \
   src/com/visorcraft/hy450control/CapabilityReport.java \
   src/com/visorcraft/hy450control/Control.java \

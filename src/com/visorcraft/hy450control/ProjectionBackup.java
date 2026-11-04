@@ -33,6 +33,10 @@ final class ProjectionBackup {
         restoreValues(readBackup(source), androidAccess(context));
     }
 
+    static void restoreValues(Context context, JSONObject values) throws Exception {
+        restoreValues(values, androidAccess(context));
+    }
+
     static JSONObject captureValues(ValueAccess access) throws Exception {
         JSONObject values = new JSONObject();
         for (String key : GLOBAL) {

@@ -108,6 +108,7 @@ public final class HostTests {
         check("IllegalStateException".equals(Errors.describe(new IllegalStateException("  "))),
                 "blank message must use class name");
 
+        testBoundedDocument();
         testRoutineEngine();
         testCapabilityReport();
         testOemRecovery();
@@ -203,6 +204,65 @@ public final class HostTests {
         }
 
         System.out.println("Host tests passed");
+    }
+
+    private static void testBoundedDocument() throws Exception {
+        class TrackingInput extends java.io.ByteArrayInputStream {
+            private boolean closed;
+
+            TrackingInput(byte[] value) {
+                super(value);
+            }
+
+            @Override
+            public int available() {
+                return 0;
+            }
+
+            @Override
+            public void close() {
+                closed = true;
+            }
+        }
+        class TrackingOutput extends java.io.ByteArrayOutputStream {
+            private boolean flushed;
+            private boolean closed;
+
+            @Override
+            public void flush() {
+                flushed = true;
+            }
+
+            @Override
+            public void close() {
+                closed = true;
+            }
+        }
+
+        byte[] maximum = new byte[1024 * 1024];
+        Arrays.fill(maximum, (byte) 'x');
+        TrackingInput maximumInput = new TrackingInput(maximum);
+        byte[] roundTrip = BoundedDocument.read(maximumInput);
+        check(roundTrip.length == maximum.length, "exact maximum must be accepted");
+        check(new String(roundTrip, java.nio.charset.StandardCharsets.UTF_8).equals(
+                        new String(maximum, java.nio.charset.StandardCharsets.UTF_8)),
+                "maximum document must round trip UTF-8");
+        check(!maximumInput.closed, "document read must not close provider stream");
+
+        TrackingInput oversizedInput = new TrackingInput(new byte[1024 * 1024 + 1]);
+        boolean oversized = false;
+        try {
+            BoundedDocument.read(oversizedInput);
+        } catch (IllegalStateException expected) {
+            oversized = "Backup exceeds 1 MiB".equals(expected.getMessage());
+        }
+        check(oversized, "oversized document must fail before JSON parsing");
+        check(!oversizedInput.closed, "oversized read must not close provider stream");
+
+        TrackingOutput output = new TrackingOutput();
+        BoundedDocument.write(output, roundTrip);
+        check(Arrays.equals(maximum, output.toByteArray()), "document write must write all bytes");
+        check(output.flushed && !output.closed, "document write must flush without closing");
     }
 
     private static void testRoutineEngine() throws Exception {

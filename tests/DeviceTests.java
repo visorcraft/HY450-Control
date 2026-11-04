@@ -13,6 +13,8 @@ public final class DeviceTests {
         private final Map<String, String> globals;
         private final Map<String, String> properties;
         int writes;
+        int globalWrites;
+        int propertyWrites;
 
         FakeAccess(Map<String, String> globals, Map<String, String> properties) {
             this.globals = globals;
@@ -27,6 +29,7 @@ public final class DeviceTests {
         @Override
         public void putGlobal(String key, String value) {
             writes++;
+            globalWrites++;
             if (value == null) {
                 globals.remove(key);
             } else {
@@ -42,11 +45,42 @@ public final class DeviceTests {
         @Override
         public void putProperty(String key, String value) {
             writes++;
+            propertyWrites++;
             if (value == null) {
                 properties.remove(key);
             } else {
                 properties.put(key, value);
             }
+        }
+    }
+
+    private static final class FakePortableAdapter implements ControlAdapter {
+        private int value;
+        int writes;
+
+        FakePortableAdapter(int value) {
+            this.value = value;
+        }
+
+        @Override
+        public int read() {
+            return value;
+        }
+
+        @Override
+        public void write(int value) {
+            writes++;
+            this.value = value;
+        }
+
+        @Override
+        public int min() {
+            return 0;
+        }
+
+        @Override
+        public int max() {
+            return 100;
         }
     }
 
@@ -95,6 +129,7 @@ public final class DeviceTests {
         check(rejected, "JSON null property must be rejected");
         check("12.5".equals(properties.get(property)), "rejected property must not be written");
 
+        testPortableBackup();
         testDiagnosticAllowlist();
         testAmbientScenes();
         testBootScheduling();
@@ -103,6 +138,169 @@ public final class DeviceTests {
         testBackupStoreDoesNotOverwrite();
         testRoutineStore();
         System.out.println("Device tests passed");
+    }
+
+    private static void testPortableBackup() throws Exception {
+        FakePortableAdapter backlight = new FakePortableAdapter(100);
+        FakePortableAdapter vendor = new FakePortableAdapter(105);
+        Map<String, java.util.List<Control>> families = portableFamilies(backlight, vendor);
+        Map<String, String> globals = new HashMap<>();
+        globals.put("JbCamX", "");
+        globals.put("PoCamX", "12.5");
+        Map<String, String> properties = new HashMap<>();
+        properties.put("persist.display.keystone_ltx", "17.5");
+        FakeAccess access = new FakeAccess(globals, properties);
+        String createdUtc = "2026-11-03T00:00:00Z";
+        JSONObject root = PortableBackup.capture(
+                families, access, "1.6.0", "test-fingerprint", createdUtc);
+
+        check(root.length() == 8, "portable root allowlist");
+        check("hy450-control-backup".equals(root.getString("type"))
+                        && root.getInt("schema") == 1,
+                "portable type and schema");
+        check(createdUtc.equals(root.getString("createdUtc"))
+                        && "1.6.0".equals(root.getString("appVersion"))
+                        && "test-fingerprint".equals(root.getString("firmware")),
+                "portable metadata");
+        JSONObject picture = root.getJSONObject("families").getJSONObject("picture");
+        check(picture.getInt("backlight") == 100, "portable capture value");
+        check(!picture.has("vendor") && root.getJSONArray("warnings").length() == 1,
+                "out-of-domain vendor getter must be omitted with a warning");
+
+        PortableBackup.Preview preview = PortableBackup.preview(root, "test-fingerprint");
+        check(preview.summary.contains("hy450-control-backup")
+                        && preview.summary.contains("schema 1")
+                        && preview.summary.contains(createdUtc),
+                "preview summary must include type, schema, and time");
+        check(preview.firmwareMatches && preview.warnings.size() == 1,
+                "preview compatibility and warnings");
+        check(backlight.writes == 0 && vendor.writes == 0 && access.writes == 0,
+                "capture and preview must not write");
+
+        PortableBackup.Validated valid = PortableBackup.validate(
+                root, families, "test-fingerprint");
+        check(valid.values.get("picture:backlight") == 100, "portable value");
+        check(valid.projection.isNull("global:GsInitXYZ"), "absent global must survive");
+        check("".equals(valid.projection.getString("global:JbCamX")),
+                "empty global must survive validation");
+        check("12.5".equals(valid.projection.getString("global:PoCamX")),
+                "non-empty global must survive validation");
+        check(createdUtc.equals(valid.createdUtc) && "1.6.0".equals(valid.appVersion)
+                        && valid.warnings.size() == 1,
+                "validated metadata and warnings");
+        check(backlight.writes == 0 && vendor.writes == 0 && access.writes == 0,
+                "validation must not write");
+
+        backlight.value = 10;
+        globals.put("GsInitXYZ", "created-later");
+        globals.put("JbCamX", "changed");
+        globals.put("PoCamX", "changed");
+        properties.put("persist.display.keystone_ltx", "changed");
+        RoutineEngine.Result applied = RoutineEngine.apply(families, valid.values);
+        ProjectionBackup.restoreValues(valid.projection, access);
+        check(applied.applied == 1 && backlight.value == 100,
+                "portable routine must round trip");
+        check(!globals.containsKey("GsInitXYZ") && "".equals(globals.get("JbCamX"))
+                        && "12.5".equals(globals.get("PoCamX"))
+                        && "17.5".equals(properties.get("persist.display.keystone_ltx")),
+                "portable projection must round trip all global states");
+
+        JSONObject mismatch = new JSONObject(root.toString());
+        mismatch.put("firmware", "other-fingerprint");
+        PortableBackup.Preview mismatchPreview = PortableBackup.preview(
+                mismatch, "test-fingerprint");
+        check(!mismatchPreview.firmwareMatches, "preview must report firmware mismatch");
+        expectPortableInvalid(mismatch, "firmware mismatch");
+
+        JSONObject wrongType = new JSONObject(root.toString());
+        wrongType.put("type", "other");
+        expectPortableInvalid(wrongType, "wrong portable type");
+        JSONObject wrongSchema = new JSONObject(root.toString());
+        wrongSchema.put("schema", 2);
+        expectPortableInvalid(wrongSchema, "wrong portable schema");
+        JSONObject extraRoot = new JSONObject(root.toString());
+        extraRoot.put("extra", true);
+        expectPortableInvalid(extraRoot, "unknown portable root key");
+        JSONObject missingRoot = new JSONObject(root.toString());
+        missingRoot.remove("createdUtc");
+        expectPortableInvalid(missingRoot, "missing portable root key");
+        JSONObject badMetadata = new JSONObject(root.toString());
+        badMetadata.put("appVersion", 16);
+        expectPortableInvalid(badMetadata, "non-string portable metadata");
+
+        JSONObject unknownFamily = new JSONObject(root.toString());
+        unknownFamily.getJSONObject("families").put("unknown", new JSONObject());
+        expectPortableInvalid(unknownFamily, "unknown portable family");
+        JSONObject unknownControl = new JSONObject(root.toString());
+        unknownControl.getJSONObject("families").getJSONObject("picture")
+                .put("unknown", 10);
+        expectPortableInvalid(unknownControl, "unknown portable control");
+        JSONObject nonInteger = new JSONObject(root.toString());
+        nonInteger.getJSONObject("families").getJSONObject("picture")
+                .put("backlight", "100");
+        expectPortableInvalid(nonInteger, "non-integer portable value");
+        JSONObject outOfDomain = new JSONObject(root.toString());
+        outOfDomain.getJSONObject("families").getJSONObject("picture")
+                .put("backlight", 105);
+        expectPortableInvalid(outOfDomain, "out-of-domain portable value");
+        JSONObject badFamilies = new JSONObject(root.toString());
+        badFamilies.put("families", new org.json.JSONArray());
+        expectPortableInvalid(badFamilies, "non-object portable families");
+        JSONObject badFamily = new JSONObject(root.toString());
+        badFamily.getJSONObject("families").put("picture", new org.json.JSONArray());
+        expectPortableInvalid(badFamily, "non-object portable family");
+        JSONObject badWarnings = new JSONObject(root.toString());
+        badWarnings.getJSONArray("warnings").put(1);
+        expectPortableInvalid(badWarnings, "non-string portable warning");
+
+        JSONObject malformedProjection = new JSONObject(root.toString());
+        malformedProjection.getJSONObject("projection").put("malformed", "value");
+        expectPortableInvalid(malformedProjection, "malformed projection key");
+        JSONObject badProjection = new JSONObject(root.toString());
+        badProjection.put("projection", new org.json.JSONArray());
+        expectPortableInvalid(badProjection, "non-object projection");
+
+        FakePortableAdapter oversizedAdapter = new FakePortableAdapter(10);
+        FakeAccess oversizedAccess = new FakeAccess(new HashMap<>(), new HashMap<>());
+        boolean oversized = false;
+        try {
+            BoundedDocument.read(new java.io.ByteArrayInputStream(new byte[1024 * 1024 + 1]));
+        } catch (IllegalStateException expected) {
+            oversized = "Backup exceeds 1 MiB".equals(expected.getMessage());
+        }
+        check(oversized, "oversized portable input");
+        check(oversizedAdapter.writes == 0 && oversizedAccess.globalWrites == 0
+                        && oversizedAccess.propertyWrites == 0,
+                "oversized portable input must not write");
+        check(ProjectionBackup.class.getDeclaredMethod(
+                        "restoreValues", android.content.Context.class, JSONObject.class) != null,
+                "Android projection restore wrapper must exist");
+    }
+
+    private static Map<String, java.util.List<Control>> portableFamilies(
+            ControlAdapter backlight, ControlAdapter vendor) {
+        Map<String, java.util.List<Control>> families = new java.util.LinkedHashMap<>();
+        families.put("picture", java.util.Arrays.asList(
+                new Control("backlight", "Backlight", backlight),
+                new Control("vendor", "Vendor", vendor)));
+        return families;
+    }
+
+    private static void expectPortableInvalid(JSONObject root, String message) throws Exception {
+        FakePortableAdapter backlight = new FakePortableAdapter(10);
+        FakePortableAdapter vendor = new FakePortableAdapter(20);
+        Map<String, java.util.List<Control>> families = portableFamilies(backlight, vendor);
+        FakeAccess access = new FakeAccess(new HashMap<>(), new HashMap<>());
+        boolean thrown = false;
+        try {
+            PortableBackup.validate(root, families, "test-fingerprint");
+        } catch (Exception expected) {
+            thrown = true;
+        }
+        check(thrown, message);
+        check(backlight.writes == 0 && vendor.writes == 0 && access.globalWrites == 0
+                        && access.propertyWrites == 0,
+                message + " with zero adapter/global/property writes");
     }
 
     private static void testDiagnosticAllowlist() throws Exception {

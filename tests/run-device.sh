@@ -15,6 +15,7 @@ javac -source 8 -target 8 -cp "$PLATFORM" -d "$OUT/classes" \
   src/com/visorcraft/hy450control/BackupStore.java \
   src/com/visorcraft/hy450control/BootLaunchService.java \
   src/com/visorcraft/hy450control/BootReceiver.java \
+  src/com/visorcraft/hy450control/BoundedDocument.java \
   src/com/visorcraft/hy450control/CapabilityReport.java \
   src/com/visorcraft/hy450control/Control.java \
   src/com/visorcraft/hy450control/ControlAdapter.java \
@@ -22,6 +23,7 @@ javac -source 8 -target 8 -cp "$PLATFORM" -d "$OUT/classes" \
   src/com/visorcraft/hy450control/Errors.java \
   src/com/visorcraft/hy450control/JsonFileStore.java \
   src/com/visorcraft/hy450control/Keystone.java \
+  src/com/visorcraft/hy450control/PortableBackup.java \
   src/com/visorcraft/hy450control/ProjectionBackup.java \
   src/com/visorcraft/hy450control/RoutineEngine.java \
   src/com/visorcraft/hy450control/RoutineStore.java \
