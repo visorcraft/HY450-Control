@@ -38,7 +38,7 @@ public final class RestoreEngine {
         int projectionApplied = 0;
         try {
             projectionRestore.restore(valid.projection);
-            projectionApplied = 1;
+            projectionApplied = valid.projection.length();
         } catch (Exception error) {
             failures.add(bound("Projection: " + Errors.describe(error)));
         }

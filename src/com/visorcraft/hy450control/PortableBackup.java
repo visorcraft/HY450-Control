@@ -119,8 +119,9 @@ public final class PortableBackup {
                 writable++;
                 if (stored != null && stored.has(control.id)) {
                     included++;
-                } else if (!hasControlWarning(warnings, control.title)) {
-                    warnings.add("Missing writable control: " + family + ":" + control.id);
+                } else {
+                    String warning = "Missing writable control: " + family + ":" + control.id;
+                    if (!warnings.contains(warning)) warnings.add(warning);
                 }
             }
             summary.append("\nIncluded ").append(family).append(" controls: ")
@@ -128,12 +129,6 @@ public final class PortableBackup {
         }
         summary.append("\nProjection values: ").append(root.getJSONObject("projection").length());
         return new Preview(summary.toString(), base.firmwareMatches, warnings);
-    }
-
-    private static boolean hasControlWarning(List<String> warnings, String title) {
-        String prefix = title + ":";
-        for (String warning : warnings) if (warning.startsWith(prefix)) return true;
-        return false;
     }
 
     public static Validated validate(JSONObject root, Map<String, List<Control>> families,

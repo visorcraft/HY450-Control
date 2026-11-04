@@ -270,9 +270,11 @@ public final class DeviceTests {
                 });
         check(order.equals(java.util.Arrays.asList("picture", "audio", "source", "projection")),
                 "restore order must continue past a family failure");
-        check(result.applied == 3 && result.familyApplied == 2
-                        && result.projectionApplied == 1 && result.failures.size() == 1,
-                "partial restore must count family and projection values independently");
+        check(result.applied == 2 + root.getJSONObject("projection").length()
+                        && result.familyApplied == 2
+                        && result.projectionApplied == root.getJSONObject("projection").length()
+                        && result.failures.size() == 1,
+                "partial restore must count family and projection entries independently");
         check(result.failures.get(0).length() <= 160,
                 "family restore failure must be bounded");
         check(projectionCalls[0] == 1 && picture.writes == 1 && audio.writes == 1
@@ -318,10 +320,12 @@ public final class DeviceTests {
         projectionOnly.put("families", noControls);
         RestoreEngine.Result projectionResult = RestoreEngine.restore(
                 projectionOnly, families, "test-fingerprint", projection -> { });
-        check(projectionResult.applied == 1 && projectionResult.familyApplied == 0
-                        && projectionResult.projectionApplied == 1
+        check(projectionResult.applied == root.getJSONObject("projection").length()
+                        && projectionResult.familyApplied == 0
+                        && projectionResult.projectionApplied == root.getJSONObject(
+                                "projection").length()
                         && projectionResult.failures.isEmpty(),
-                "projection-only restore must report one applied projection value");
+                "projection-only restore must report every applied projection entry");
 
         JSONObject malformed = new JSONObject(root.toString());
         malformed.put("extra", true);
@@ -625,7 +629,7 @@ public final class DeviceTests {
                         },
                         safety -> PortableBackup.preview(safety, families, "test-fingerprint"));
         BackupRecoveryActivity.RestorePreparation prepared = restore.prepare(root);
-        check(prepared.confirmation.contains("Safety omissions / warnings: 1")
+        check(prepared.confirmation.contains("Safety omissions / warnings: 2")
                         && prepared.confirmation.contains("Vendor"),
                 "confirmation model must contain prepared safety omissions");
         check(restore.onConfirmation(false, prepared) == null,
@@ -710,7 +714,7 @@ public final class DeviceTests {
                         && preview.summary.contains("schema 1")
                         && preview.summary.contains(createdUtc),
                 "preview summary must include type, schema, and time");
-        check(preview.firmwareMatches && preview.warnings.size() == 1,
+        check(preview.firmwareMatches && preview.warnings.size() == 2,
                 "preview compatibility and warnings");
         check(backlight.writes == 0 && vendor.writes == 0 && access.writes == 0,
                 "capture and preview must not write");
@@ -724,7 +728,7 @@ public final class DeviceTests {
         check("12.5".equals(valid.projection.getString("global:PoCamX")),
                 "non-empty global must survive validation");
         check(createdUtc.equals(valid.createdUtc) && "1.6.0".equals(valid.appVersion)
-                        && valid.warnings.size() == 1,
+                        && valid.warnings.size() == 2,
                 "validated metadata and warnings");
         check(backlight.writes == 0 && vendor.writes == 0 && access.writes == 0,
                 "validation must not write");
@@ -743,6 +747,17 @@ public final class DeviceTests {
                         && silentValid.warnings.size() == 1
                         && backlight.writes == 0 && vendor.writes == 0,
                 "silently incomplete document must expose derived counts and omissions");
+
+        JSONObject titleCollision = new JSONObject(silent.toString());
+        titleCollision.put("warnings", new org.json.JSONArray()
+                .put("Vendor: old capture failure"));
+        PortableBackup.Preview collisionPreview = PortableBackup.preview(
+                titleCollision, families, "test-fingerprint");
+        check(collisionPreview.warnings.size() == 2
+                        && collisionPreview.warnings.contains(
+                                "Missing writable control: picture:vendor")
+                        && backlight.writes == 0 && vendor.writes == 0,
+                "title-matching stored warning must not suppress canonical missing ID");
 
         backlight.value = 10;
         globals.put("GsInitXYZ", "created-later");
