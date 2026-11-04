@@ -253,10 +253,12 @@ temperature, gamma, and dynamic-backlight values.
 
 ## Verified on hardware
 
-The 1.6.0/versionCode 12 Owner Assistant candidate was installed through the
-reversible Magisk module and verified at 1920×1080. The locally signed candidate
-APK SHA-256 is `86a49600b2929693283ac47dbf91d2df53da5617644395ed06502314b8855301`.
-This is a verified source candidate, not a published GitHub release.
+The final 1.6.0/versionCode 12 Owner Assistant source at `d8c4706` was installed
+through the reversible Magisk module and launch-verified at 1920×1080. The active
+locally signed APK SHA-256 is
+`7afcb116ba3a48fc6ef966ec8a99b845d65c588d5a87d957d3f41dd7e36f8cde`.
+Public `master` CI passed for this source. This is a verified source candidate,
+not a published GitHub release.
 
 The 1.6.0 checks included:
 
