@@ -76,6 +76,12 @@ public class MainActivity extends Activity {
                 v -> startActivity(new Intent(this, PlaygroundActivity.class)));
         root.addView(play);
 
+        root.addView(Ui.section(this, "OWNER ASSISTANT", GAP_PX));
+        LinearLayout owner = row();
+        destinationTile(owner, "Owner Assistant", "Setup, routines, backup & diagnostics",
+                v -> startActivity(new Intent(this, OwnerAssistantActivity.class)));
+        root.addView(owner);
+
         root.addView(Ui.section(this, "ADVANCED · OEM TOOLS", GAP_PX));
         LinearLayout tools = row();
         oemTool(tools, "OEM input source", "com.softwinner.awsource",

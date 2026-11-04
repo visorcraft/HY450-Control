@@ -139,6 +139,7 @@ public final class DeviceTests {
         testRoutineStore();
         testOwnerBackupStore();
         testRestoreEngine();
+        testOwnerAssistantUiState();
         System.out.println("Device tests passed");
     }
 
@@ -331,6 +332,106 @@ public final class DeviceTests {
             check(adapter.writes == 0, message + " must not write families");
         }
         check(projectionCalls[0] == 0, message + " must not write projection");
+    }
+
+    private static void testOwnerAssistantUiState() throws Exception {
+        File directory = new File("/data/local/tmp",
+                "hy450-owner-ui-state-" + System.nanoTime());
+        check(directory.mkdirs(), "owner UI-state test directory must be created");
+        try {
+            FakePortableAdapter backlight = new FakePortableAdapter(100);
+            FakePortableAdapter vendor = new FakePortableAdapter(20);
+            Map<String, java.util.List<Control>> families = portableFamilies(backlight, vendor);
+            FakeAccess access = new FakeAccess(new HashMap<>(), new HashMap<>());
+            JSONObject root = PortableBackup.capture(families, access,
+                    "1.6.0", "test-fingerprint", "2026-11-03T00:00:00Z");
+
+            RoutineStore routines = new RoutineStore(new File(directory, "routines"));
+            RoutinesActivity.UiState empty = RoutinesActivity.uiState(null, null);
+            check(!empty.applyEnabled && !empty.undoEnabled,
+                    "empty slot and absent undo must disable writes");
+            routines.saveUndo(routineCapture(90, "undo"));
+            RoutinesActivity.UiState recreated = RoutinesActivity.uiState(
+                    null, new RoutineStore(new File(directory, "routines")).readUndo());
+            check(!recreated.applyEnabled && recreated.undoEnabled,
+                    "persisted undo must survive recreation without enabling an empty slot");
+            routines.saveSlot("movie", routineCapture(10, "slot"));
+            check(RoutinesActivity.uiState(routines.readSlot("movie"), null).applyEnabled,
+                    "populated slot must enable Apply");
+
+            BackupRecoveryActivity.ImportState valid = BackupRecoveryActivity.inspect(
+                    root, families, "test-fingerprint");
+            check(valid.restoreEnabled && valid.preview != null && valid.error == null,
+                    "valid matching import must enable Restore");
+            JSONObject malformed = new JSONObject(root.toString());
+            malformed.put("extra", true);
+            BackupRecoveryActivity.ImportState invalid = BackupRecoveryActivity.inspect(
+                    malformed, families, "test-fingerprint");
+            check(!invalid.restoreEnabled && invalid.error != null,
+                    "invalid import must disable Restore");
+            JSONObject mismatch = new JSONObject(root.toString());
+            mismatch.put("firmware", "other-fingerprint");
+            BackupRecoveryActivity.ImportState mismatched = BackupRecoveryActivity.inspect(
+                    mismatch, families, "test-fingerprint");
+            check(!mismatched.restoreEnabled && mismatched.preview != null
+                            && !mismatched.preview.firmwareMatches,
+                    "firmware mismatch must remain previewable but disable Restore");
+
+            OwnerBackupStore safety = new OwnerBackupStore(new File(directory, "safety"));
+            safety.saveSafety(root);
+            BackupRecoveryActivity.ImportState recovered = BackupRecoveryActivity.inspect(
+                    new OwnerBackupStore(new File(directory, "safety")).readSafety(),
+                    families, "test-fingerprint");
+            check(recovered.restoreEnabled,
+                    "persisted safety document must enable recovery after recreation");
+            BackupRecoveryActivity.ImportState cancelled =
+                    BackupRecoveryActivity.cancelledImport();
+            check(!cancelled.restoreEnabled && cancelled.root == null,
+                    "SAF cancellation/BACK must clear import eligibility");
+
+            android.content.Context context = nonLiveContext(1920, 1080);
+            android.widget.TextView preview = BackupRecoveryActivity.renderPreview(
+                    context, valid.preview);
+            android.widget.TextView error = BackupRecoveryActivity.renderError(
+                    context, "Malformed backup");
+            check(preview.getText().length() > 0 && error.getText().length() > 0,
+                    "1920x1080 preview and error helpers must render non-empty text");
+            check(backlight.writes == 0 && vendor.writes == 0 && access.writes == 0
+                            && access.globalWrites == 0 && access.propertyWrites == 0,
+                    "preview, cancellation, and recreated recovery state must not write hardware");
+        } finally {
+            deleteRecursively(directory);
+        }
+    }
+
+    private static android.content.Context nonLiveContext(int width, int height) {
+        android.util.DisplayMetrics metrics = new android.util.DisplayMetrics();
+        metrics.widthPixels = width;
+        metrics.heightPixels = height;
+        metrics.density = 1f;
+        metrics.scaledDensity = 1f;
+        metrics.densityDpi = 160;
+        android.content.res.Configuration configuration = new android.content.res.Configuration();
+        configuration.fontScale = 1f;
+        android.content.res.Resources resources = new android.content.res.Resources(
+                null, metrics, configuration) {
+            @Override
+            public int getColor(int id) {
+                return 0xfff4f7fb;
+            }
+        };
+        android.content.res.Resources.Theme theme = resources.newTheme();
+        return new android.content.ContextWrapper(null) {
+            @Override
+            public android.content.res.Resources getResources() {
+                return resources;
+            }
+
+            @Override
+            public android.content.res.Resources.Theme getTheme() {
+                return theme;
+            }
+        };
     }
 
     private static void testPortableBackup() throws Exception {

@@ -29,6 +29,9 @@
         <activity android:name=".ProjectionActivity" android:exported="false" />
         <activity android:name=".AutomationActivity" android:exported="false" />
         <activity android:name=".PlaygroundActivity" android:exported="false" />
+        <activity android:name=".OwnerAssistantActivity" android:exported="false" />
+        <activity android:name=".RoutinesActivity" android:exported="false" />
+        <activity android:name=".BackupRecoveryActivity" android:exported="false" />
         <service android:name=".OverlayService" android:exported="false" />
         <service
             android:name=".BootLaunchService"
