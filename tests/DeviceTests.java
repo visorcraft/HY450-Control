@@ -137,7 +137,200 @@ public final class DeviceTests {
         testReadBackup();
         testBackupStoreDoesNotOverwrite();
         testRoutineStore();
+        testOwnerBackupStore();
+        testRestoreEngine();
         System.out.println("Device tests passed");
+    }
+
+    private static void testOwnerBackupStore() throws Exception {
+        File directory = new File("/data/local/tmp",
+                "hy450-owner-backup-store-" + System.nanoTime());
+        check(directory.mkdirs(), "owner-backup test directory must be created");
+        try {
+            FakePortableAdapter backlight = new FakePortableAdapter(25);
+            Map<String, java.util.List<Control>> families = portableFamilies(
+                    backlight, new FakePortableAdapter(20));
+            FakeAccess access = new FakeAccess(new HashMap<>(), new HashMap<>());
+            JSONObject root = PortableBackup.capture(
+                    families, access, "1.6.0", "test-fingerprint", "2026-11-03T00:00:00Z");
+            OwnerBackupStore store = new OwnerBackupStore(directory);
+            check(store.readSafety() == null, "absent safety copy must return null");
+            store.saveSafety(root);
+            File target = new File(directory, "pre-restore-backup.json");
+            String original = JsonFileStore.read(target);
+            check(root.toString().equals(new OwnerBackupStore(directory).readSafety().toString()),
+                    "safety JSON must survive store recreation");
+            check(!new File(directory, "pre-restore-backup.tmp").exists(),
+                    "atomic safety rename must consume temporary file");
+            check(OwnerBackupStore.class.getConstructor(android.content.Context.class) != null,
+                    "Context safety-store constructor must exist");
+
+            JSONObject replacement = new JSONObject(root.toString());
+            replacement.put("createdUtc", "2026-11-03T00:01:00Z");
+            File temporary = new File(directory, "pre-restore-backup.tmp");
+            check(temporary.mkdir(), "temporary-path collision must be created");
+            boolean failed = false;
+            try {
+                store.saveSafety(replacement);
+            } catch (Exception expected) {
+                failed = true;
+            } finally {
+                temporary.delete();
+            }
+            check(failed, "failed second safety save must throw");
+            check(original.equals(JsonFileStore.read(target))
+                            && root.toString().equals(store.readSafety().toString()),
+                    "failed second safety save must preserve the first file");
+
+            JSONObject invalid = new JSONObject(replacement.toString());
+            invalid.put("schema", 2);
+            failed = false;
+            try {
+                store.saveSafety(invalid);
+            } catch (Exception expected) {
+                failed = true;
+            }
+            check(failed && original.equals(JsonFileStore.read(target)),
+                    "schema rejection must preserve the prior safety copy");
+        } finally {
+            deleteRecursively(directory);
+        }
+    }
+
+    private static final class RestoreAdapter implements ControlAdapter {
+        private final String family;
+        private final java.util.List<String> order;
+        private int value;
+        int writes;
+        Exception failure;
+
+        RestoreAdapter(String family, int value, java.util.List<String> order) {
+            this.family = family;
+            this.value = value;
+            this.order = order;
+        }
+
+        @Override
+        public int read() {
+            return value;
+        }
+
+        @Override
+        public void write(int value) throws Exception {
+            writes++;
+            order.add(family);
+            if (failure != null) throw failure;
+            this.value = value;
+        }
+
+        @Override
+        public int min() {
+            return 0;
+        }
+
+        @Override
+        public int max() {
+            return 100;
+        }
+    }
+
+    private static void testRestoreEngine() throws Exception {
+        java.util.List<String> order = new java.util.ArrayList<>();
+        RestoreAdapter picture = new RestoreAdapter("picture", 10, order);
+        RestoreAdapter audio = new RestoreAdapter("audio", 20, order);
+        RestoreAdapter source = new RestoreAdapter("source", 30, order);
+        Map<String, java.util.List<Control>> families = new java.util.LinkedHashMap<>();
+        families.put("source", java.util.Collections.singletonList(
+                new Control("source", "Source", source)));
+        families.put("audio", java.util.Collections.singletonList(
+                new Control("audio", "Audio", audio)));
+        families.put("picture", java.util.Collections.singletonList(
+                new Control("picture", "Picture", picture)));
+        Map<String, String> globals = new HashMap<>();
+        globals.put("JbCamX", "before");
+        Map<String, String> properties = new HashMap<>();
+        properties.put("persist.display.keystone_ltx", "12.5");
+        FakeAccess access = new FakeAccess(globals, properties);
+        JSONObject root = PortableBackup.capture(families, access,
+                "1.6.0", "test-fingerprint", "2026-11-03T00:00:00Z");
+        globals.put("JbCamX", "changed");
+        properties.put("persist.display.keystone_ltx", "changed");
+        String longError = new String(new char[240]).replace('\0', 'x');
+        audio.failure = new Exception(longError);
+        int[] projectionCalls = {0};
+        RestoreEngine.Result result = RestoreEngine.restore(
+                root, families, "test-fingerprint", projection -> {
+                    projectionCalls[0]++;
+                    order.add("projection");
+                    ProjectionBackup.restoreValues(projection, access);
+                });
+        check(order.equals(java.util.Arrays.asList("picture", "audio", "source", "projection")),
+                "restore order must continue past a family failure");
+        check(result.applied == 2 && result.failures.size() == 1,
+                "partial restore failure must be visible");
+        check(result.failures.get(0).length() <= 160,
+                "family restore failure must be bounded");
+        check(projectionCalls[0] == 1 && picture.writes == 1 && audio.writes == 1
+                        && source.writes == 1,
+                "restore must not automatically retry families or projection");
+        check("before".equals(globals.get("JbCamX"))
+                        && "12.5".equals(properties.get("persist.display.keystone_ltx")),
+                "projection restore must receive validated values");
+        boolean immutable = false;
+        try {
+            result.failures.add("unexpected");
+        } catch (UnsupportedOperationException expected) {
+            immutable = true;
+        }
+        check(immutable, "restore failures must be immutable");
+
+        order.clear();
+        picture.writes = 0;
+        audio.writes = 0;
+        source.writes = 0;
+        audio.failure = null;
+        projectionCalls[0] = 0;
+        RestoreEngine.Result projectionFailure = RestoreEngine.restore(
+                root, families, "test-fingerprint", projection -> {
+                    projectionCalls[0]++;
+                    throw new Exception(longError);
+                });
+        check(projectionFailure.applied == 3 && projectionFailure.failures.size() == 1
+                        && projectionFailure.failures.get(0).startsWith("Projection: ")
+                        && projectionFailure.failures.get(0).length() <= 160,
+                "projection exception must be reported once with bounded text");
+        check(projectionCalls[0] == 1 && picture.writes == 1 && audio.writes == 1
+                        && source.writes == 1,
+                "projection failure must not trigger another restore");
+
+        JSONObject malformed = new JSONObject(root.toString());
+        malformed.put("extra", true);
+        expectRestoreInvalid(malformed, families, "test-fingerprint",
+                new RestoreAdapter[] {picture, audio, source}, projectionCalls,
+                "malformed restore root");
+        expectRestoreInvalid(root, families, "other-fingerprint",
+                new RestoreAdapter[] {picture, audio, source}, projectionCalls,
+                "wrong-fingerprint restore");
+    }
+
+    private static void expectRestoreInvalid(JSONObject root,
+            Map<String, java.util.List<Control>> families, String fingerprint,
+            RestoreAdapter[] adapters, int[] projectionCalls, String message) throws Exception {
+        for (RestoreAdapter adapter : adapters) adapter.writes = 0;
+        projectionCalls[0] = 0;
+        boolean thrown = false;
+        try {
+            RestoreEngine.restore(root, families, fingerprint, projection -> {
+                projectionCalls[0]++;
+            });
+        } catch (Exception expected) {
+            thrown = true;
+        }
+        check(thrown, message + " must be rejected");
+        for (RestoreAdapter adapter : adapters) {
+            check(adapter.writes == 0, message + " must not write families");
+        }
+        check(projectionCalls[0] == 0, message + " must not write projection");
     }
 
     private static void testPortableBackup() throws Exception {

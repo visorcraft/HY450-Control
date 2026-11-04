@@ -23,8 +23,10 @@ javac -source 8 -target 8 -cp "$PLATFORM" -d "$OUT/classes" \
   src/com/visorcraft/hy450control/Errors.java \
   src/com/visorcraft/hy450control/JsonFileStore.java \
   src/com/visorcraft/hy450control/Keystone.java \
+  src/com/visorcraft/hy450control/OwnerBackupStore.java \
   src/com/visorcraft/hy450control/PortableBackup.java \
   src/com/visorcraft/hy450control/ProjectionBackup.java \
+  src/com/visorcraft/hy450control/RestoreEngine.java \
   src/com/visorcraft/hy450control/RoutineEngine.java \
   src/com/visorcraft/hy450control/RoutineStore.java \
   src/com/visorcraft/hy450control/Vendor.java tests/DeviceTests.java
