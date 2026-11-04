@@ -56,6 +56,15 @@ public final class RoutineEngine {
     }
 
     public static void validate(Map<String, List<Control>> families, Map<String, Integer> values) {
+        for (String family : families.keySet()) {
+            boolean supported = false;
+            for (String candidate : FAMILIES) {
+                if (candidate.equals(family)) supported = true;
+            }
+            if (!supported) {
+                throw new IllegalArgumentException("Unsupported routine family: " + family);
+            }
+        }
         for (Map.Entry<String, Integer> entry : values.entrySet()) {
             String storedKey = entry.getKey();
             int separator = storedKey.indexOf(':');

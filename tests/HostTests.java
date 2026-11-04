@@ -315,6 +315,21 @@ public final class HostTests {
         expectThrows(() -> RoutineEngine.validate(applyFamilies, unknownEntry),
                 "unknown routine family must be rejected");
 
+        RoutineAdapter supportedAdapter = new RoutineAdapter(10, true, null, null);
+        RoutineAdapter unsupportedAdapter = new RoutineAdapter(20, true, null, null);
+        Map<String, List<Control>> unsupportedFamilies = new java.util.LinkedHashMap<>();
+        unsupportedFamilies.put("picture", Arrays.asList(
+                new Control("supported", "Supported", supportedAdapter)));
+        unsupportedFamilies.put("unsupported", Arrays.asList(
+                new Control("valid", "Valid but unsupported", unsupportedAdapter)));
+        Map<String, Integer> unsupportedValues = new HashMap<>();
+        unsupportedValues.put("picture:supported", 10);
+        unsupportedValues.put("unsupported:valid", 20);
+        expectThrows(() -> RoutineEngine.apply(unsupportedFamilies, unsupportedValues),
+                "supplied unsupported family must be rejected");
+        check(supportedAdapter.writeCalls == 0 && unsupportedAdapter.writeCalls == 0,
+                "unsupported family rejection must precede every write");
+
         RoutineAdapter pictureFailure = new RoutineAdapter(1, true, null,
                 new Exception("picture"));
         RoutineAdapter audioFailure = new RoutineAdapter(2, true, null,
